@@ -905,7 +905,7 @@ const PROLOGUES: Dictionary = {
 				"id": "message", "title": "还做不做", "speaker": "林越",
 				"scene": "title", "place": "凌晨 01:17", "lin": true,
 				"body": [
-					"凌晨一点十七，手机亮了。",
+					"手机亮了。",
 					"『还做不做？』",
 					"后面跟着一张截图：第 47 题的失败记录。",
 					"你回消息之前，先把那张图放大看了一遍。",

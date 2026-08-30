@@ -5100,9 +5100,12 @@ func _draw_first_day_portrait(phase_index: int) -> void:
 			draw_arc(steam_center, 7.0 + steam_phase * 3.0, -2.7, -0.35, 12, Color(0.84, 0.91, 0.88, (1.0 - steam_phase) * 0.22), 1.0, true)
 	draw_rect(Rect2(frame.position + Vector2(8, frame.size.y - 46), Vector2(frame.size.x - 16, 38)), Color(0.025, 0.09, 0.105, 0.94))
 	draw_circle(frame.position + Vector2(24, frame.size.y - 27), 4.0, GREEN_BRIGHT)
-	_draw_display_text("林越", frame.position + Vector2(38, frame.size.y - 20), 16, Color("#eef3ef"))
-	_draw_text("CTO · 就在这里", frame.position + Vector2(102, frame.size.y - 21), 12, Color("#b8ccca"))
-	if phase_index >= 3:
+	_draw_display_text("林越", frame.position + Vector2(38, frame.size.y - 22), TYPE_SECTION, Color("#eef3ef"))
+	# In a prologue she is a message from somewhere else. The garage is the first
+	# time she is in the room, and the caption should not spend that early.
+	_draw_text("凌晨 01:17 · 一条消息" if _is_origin_prologue() else "CTO · 就在这里", frame.position + Vector2(102, frame.size.y - 21), TYPE_META, Color("#b8ccca"))
+	if phase_index >= 3 and not _is_origin_prologue():
+		# LANTERN does not exist yet at the company you are leaving.
 		_draw_first_day_terminal_card(frame, phase_index)
 
 
