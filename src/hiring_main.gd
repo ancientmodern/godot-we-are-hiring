@@ -5049,88 +5049,66 @@ func _elevator_floor_button_visual_contract() -> Dictionary:
 
 
 func _draw_night_shift() -> void:
-	_draw_art_background(art_office_night, Color(0.82, 0.90, 0.92, 1.0))
-	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.015, 0.045, 0.06, 0.52))
-	for i in 6:
-		draw_rect(Rect2(0, 80 + i * 104, 1280, 1), Color(0.34, 0.53, 0.58, 0.08))
-	_draw_text("夜班 / %s" % str(current_night.get("title", "办公室")), Vector2(44, 29), 13, NIGHT_TEXT)
+	# The office is a painting, not a floor plan. The earlier build laid a
+	# 1064x492 panel, four grid lines and six thumbnail cards over the top of it
+	# and hid about 85% of the art; the code called that "systems, not spectacle",
+	# but what it actually read as was a level editor. Now the objects are
+	# annotated where they physically are, the way an inspector marks a photograph.
+	_draw_art_background(art_office_night, Color(0.92, 0.97, 1.0, 1.0))
+	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.015, 0.045, 0.06, 0.26))
+	# A sensor light stands over wherever you are. It is the only avatar there is.
+	_draw_night_presence()
+	for band in 7:
+		draw_rect(Rect2(0, band * 16, 1280, 16), Color(0.01, 0.03, 0.042, 0.66 - band * 0.093))
+	_draw_text("夜班 · %s" % str(current_night.get("title", "办公室")), Vector2(44, 32), TYPE_LABEL, NIGHT_TEXT)
 	var intro_surface := _night_intro_surface_lines()
-	_draw_text(str(intro_surface.get("subtitle", "")), Vector2(44, 50), 12, NIGHT_MUTED)
-	_draw_text(str(intro_surface.get("opening", "")), Vector2(44, 71), 12, COLD_20)
-	var night_hint_plate := Rect2(NIGHT_HINT_SAFE_RECT.position - Vector2(10, 5), NIGHT_HINT_SAFE_RECT.size + Vector2(20, 10))
-	_draw_panel(night_hint_plate, Color(0.025, 0.075, 0.09, 0.92), Color(0.35, 0.50, 0.53, 0.34), 3.0, 1.0)
-	_draw_text("方向键 / D-pad 选择 · E / A 交互 · 鼠标亦可", NIGHT_HINT_SAFE_RECT.position + Vector2(0, 20), 12, NIGHT_TEXT, HORIZONTAL_ALIGNMENT_RIGHT, NIGHT_HINT_SAFE_RECT.size.x)
-	var floor := Rect2(108, 92, 1064, 492)
-	_draw_panel(Rect2(floor.position + Vector2(0, 8), floor.size), Color(0.0, 0.02, 0.03, 0.32), Color.TRANSPARENT, 8.0, 0.0)
-	_draw_panel(floor, Color(0.035, 0.095, 0.12, 0.88), COLD_60, 8.0, 1.0)
-	# Minimal office floor plan: systems, not spectacle.
-	for x in [300.0, 540.0, 780.0, 1010.0]:
-		draw_line(Vector2(x, 92), Vector2(x, 584), Color(0.22, 0.37, 0.41, 0.52), 1.0)
-	for y in [258.0, 422.0]:
-		draw_line(Vector2(108, y), Vector2(1172, y), Color(0.22, 0.37, 0.41, 0.52), 1.0)
+	_draw_text(str(intro_surface.get("subtitle", "")), Vector2(44, 54), TYPE_META, NIGHT_MUTED)
+	_draw_text(str(intro_surface.get("opening", "")), Vector2(44, 76), TYPE_META, COLD_20)
+	_draw_text("方向键 / D-pad 选择 · E / A 交互 · 鼠标亦可", NIGHT_HINT_SAFE_RECT.position + Vector2(0, 22), TYPE_META, Color(NIGHT_MUTED, 0.86), HORIZONTAL_ALIGNMENT_RIGHT, NIGHT_HINT_SAFE_RECT.size.x)
 	_draw_night_tone_fixtures()
-	# The cursor is a door-access trace, not an avatar. Nearby ceiling zones wake
-	# as it moves and the already-passed zones fall dark again.
-	for zone in 7:
-		var zone_center := Vector2(160.0 + zone * 160.0, 340.0)
-		var distance := absf(zone_center.x - night_player_position.x)
-		var light_strength := clampf(1.0 - distance / 260.0, 0.0, 1.0)
-		draw_rect(Rect2(zone_center - Vector2(68, 222), Vector2(136, 444)), Color(0.36, 0.62, 0.68, 0.018 + light_strength * 0.050))
-	draw_circle(night_player_position, 15.0 + sin(_motion_clock() * 2.8) * 2.0, Color(0.40, 0.72, 0.78, 0.08))
-	draw_circle(night_player_position, 9.0, NIGHT_MUTED)
-	draw_circle(night_player_position, 3.0, COLD_10)
 	for object_index in night_objects.size():
 		var object: Dictionary = night_objects[object_index]
 		var rect := Rect2(object.get("rect", Rect2()))
 		var seen := night_seen.has(str(object.get("id", "")))
 		var focused := object_index == night_focused_object_index
-		var object_pulse := (sin(_motion_clock() * 1.8 + float(str(object.get("id", "")).hash() % 9)) + 1.0) * 0.5
-		var object_border := BLUE if focused else (GREEN_BRIGHT if seen else COLD_60.lerp(BLUE, object_pulse * 0.18))
-		_draw_night_object_tile(object, rect, seen, object_border)
-		if focused:
-			_draw_panel(rect.grow(4.0), Color.TRANSPARENT, BLUE, 9.0, 2.0)
-		var progress := _night_object_progress_label(str(object.get("id", "")))
-		if not progress.is_empty():
-			_draw_text_centered(progress, Rect2(rect.position + Vector2(0, rect.size.y - 16), Vector2(rect.size.x, 14)), 10, GREEN_BRIGHT if seen else COLD_40, 1.0)
+		_draw_night_object_tile(object, rect, seen, focused)
 	if not result_lines.is_empty():
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.01, 0.02, 0.02, 0.58))
-		var modal := Rect2(256, 112, 768, 484)
+		var modal := Rect2(256, 118, 768, 452)
 		draw_rect(Rect2(modal.position + Vector2(8, 10), modal.size), Color(0.0, 0.01, 0.02, 0.30))
 		draw_rect(modal, COLD_95)
 		draw_rect(modal, COLD_60, false, 1.0)
-		draw_rect(Rect2(modal.position, Vector2(6, modal.size.y)), GREEN_BRIGHT.darkened(0.18))
-		draw_rect(Rect2(modal.position + Vector2(332, -5), Vector2(104, 12)), COLD_70)
-		_draw_text("现场检查记录 / 夜班", modal.position + Vector2(modal.size.x - 266, 35), TYPE_META, COLD_50, HORIZONTAL_ALIGNMENT_RIGHT, 234)
-		_draw_text("【%s】" % result_title, modal.position + Vector2(30, 44), 14, GREEN_BRIGHT)
-		draw_line(modal.position + Vector2(30, 58), modal.position + Vector2(modal.size.x - 30, 58), COLD_70, 1.0)
+		draw_rect(Rect2(modal.position, Vector2(3, modal.size.y)), Color(GREEN, 0.85))
+		_draw_text("现场检查记录", modal.position + Vector2(modal.size.x - 266, 40), TYPE_META, COLD_50, HORIZONTAL_ALIGNMENT_RIGHT, 234)
+		_draw_display_text(result_title, modal.position + Vector2(30, 48), TYPE_SECTION, NIGHT_TEXT)
+		draw_line(modal.position + Vector2(30, 66), modal.position + Vector2(modal.size.x - 30, 66), Color(COLD_60, 0.7), 1.0)
 		var active_visual_id := str(night_interaction.active_object_id) if night_interaction != null else ""
 		var has_detail_visual := active_visual_id in ["whiteboard", "pothos", "window_desk", "meeting_room_d", "terminal", "corridor", "fridge", "mug"]
-		var copy_width := 404.0 if has_detail_visual else modal.size.x - 60.0
-		_draw_paragraph_array(result_lines, Rect2(modal.position + Vector2(30, 68), Vector2(copy_width, modal.size.y - 150)), 16, NIGHT_TEXT, 27)
+		var copy_width := 384.0 if has_detail_visual else modal.size.x - 60.0
+		_draw_paragraph_array(result_lines, Rect2(modal.position + Vector2(30, 84), Vector2(copy_width, modal.size.y - 156)), TYPE_BODY, NIGHT_TEXT, 28)
 		if has_detail_visual:
-			var detail_rect := Rect2(modal.position + Vector2(462, 68), Vector2(274, 272))
+			var detail_rect := Rect2(modal.position + Vector2(448, 84), Vector2(290, 288))
 			draw_rect(detail_rect, COLD_99)
-			draw_rect(detail_rect, MUTED, false, 1.0)
-			draw_rect(Rect2(detail_rect.position, Vector2(detail_rect.size.x, 4)), COLD_50)
-			_draw_night_authored_visual(active_visual_id, detail_rect.grow(-10.0), true)
+			draw_rect(detail_rect, Color(COLD_60, 0.8), false, 1.0)
+			_draw_night_authored_visual(active_visual_id, detail_rect.grow(-8.0), true)
 		_draw_ledger_button(_night_modal_close_rect(), "收起检查记录", _gamepad_shortcut("A / B", "ENTER"), "night", true, true)
 	else:
 		var exit_button := _night_exit_rect()
-		_draw_ledger_button(exit_button, "锁门离开" if _night_complete() else "门禁：尚未巡检", _gamepad_shortcut("A", "E") if _night_complete() else "", "night", _night_complete())
+		_draw_ledger_button(exit_button, "锁门离开" if _night_complete() else "还没走完一遍", _gamepad_shortcut("A", "E") if _night_complete() else "", "night", _night_complete())
 		if night_interaction != null and night_interaction.terminal_accepts_command():
-			_draw_text("终端已聚焦 · X / Ctrl+C 中断 · Enter 提交", Vector2(802, 613), 12, COLD_40)
+			_draw_text("终端已聚焦 · X / Ctrl+C 中断 · Enter 提交", Vector2(802, 613), TYPE_META, NIGHT_MUTED)
 
 
 func _night_tone_fixture_contract() -> Dictionary:
 	return {
 		"microwave": {
-			"rect": Rect2(914, 116, 118, 66),
+			"rect": Rect2(40, 402, 104, 58),
 			"clock": "--:--",
 			"interactive": false,
 			"sound": "none",
 		},
 		"abandoned_monitor": {
-			"rect": Rect2(356, 302, 142, 82),
+			"rect": Rect2(214, 300, 130, 58),
 			"line": "今天先做到这里。",
 			"interactive": false,
 		},
@@ -5148,28 +5126,90 @@ func _night_intro_surface_lines() -> Dictionary:
 
 func _draw_night_tone_fixtures() -> void:
 	var fixtures := _night_tone_fixture_contract()
+	# Both fixtures live in the dark left side of the room, and both are painted
+	# dark: the only thing either of them emits is the light of its own screen.
 	var microwave: Dictionary = fixtures["microwave"]
 	var microwave_rect: Rect2 = microwave["rect"]
-	_draw_panel(microwave_rect, Color("#c8cfcb"), Color("#65716c"), 3.0, 1.0)
-	var microwave_window := Rect2(microwave_rect.position + Vector2(8, 11), Vector2(73, 42))
-	_draw_panel(microwave_window, Color("#26302d"), Color("#818b86"), 2.0, 1.0)
-	_draw_text(str(microwave["clock"]), microwave_rect.position + Vector2(86, 26), 10, Color("#335f4a"))
-	for button_y in [34.0, 44.0, 54.0]:
-		draw_circle(microwave_rect.position + Vector2(94, button_y), 1.7, Color("#68736e"))
+	_draw_panel(microwave_rect, Color(0.045, 0.072, 0.082, 0.62), Color(COLD_60, 0.22), 2.0, 1.0)
+	var microwave_window := Rect2(microwave_rect.position + Vector2(7, 10), Vector2(66, 40))
+	_draw_panel(microwave_window, Color(0.015, 0.035, 0.04, 0.8), Color(COLD_70, 0.45), 1.0, 1.0)
+	_draw_text(str(microwave["clock"]), microwave_rect.position + Vector2(80, 26), TYPE_META, Color(GREEN_BRIGHT, 0.42))
+	for button_y in [34.0, 44.0]:
+		draw_circle(microwave_rect.position + Vector2(88, button_y), 1.6, Color(COLD_50, 0.5))
 	var monitor: Dictionary = fixtures["abandoned_monitor"]
 	var monitor_rect: Rect2 = monitor["rect"]
-	_draw_panel(monitor_rect, Color("#202a27"), Color("#4d5d56"), 3.0, 1.0)
-	_draw_text(str(monitor["line"]), monitor_rect.position + Vector2(10, 25), 10, Color("#8ca697"))
-	draw_rect(Rect2(monitor_rect.position + Vector2(10, 36), Vector2(92, 1)), Color("#62786b"))
+	_draw_panel(monitor_rect, Color(0.04, 0.068, 0.075, 0.74), Color(COLD_60, 0.32), 2.0, 1.0)
+	_draw_text(str(monitor["line"]), monitor_rect.position + Vector2(10, 26), TYPE_META, Color(NIGHT_MUTED, 0.8))
+	draw_rect(Rect2(monitor_rect.position + Vector2(10, 36), Vector2(84, 1)), Color(COLD_50, 0.44))
 
 
-func _draw_night_object_tile(object: Dictionary, rect: Rect2, seen: bool, border: Color) -> void:
-	var hovered := rect.has_point(mouse_position)
-	_draw_panel(rect, COLD_80 if hovered else INK, border, 5.0, 1.0)
+func _draw_night_presence() -> void:
+	# Motion-sensor light: a soft pool on the floor where you are standing, and
+	# nothing else. A cyan dot on a painted room reads as a bug.
+	var breath := 1.0 if reduced_motion else 1.0 + sin(_motion_clock() * 1.6) * 0.04
+	for ring in 4:
+		var radius := (150.0 - ring * 32.0) * breath
+		draw_circle(night_player_position, radius, Color(0.58, 0.72, 0.70, 0.030))
+	draw_circle(night_player_position, 26.0 * breath, Color(0.72, 0.80, 0.74, 0.05))
+
+
+func _night_object_action_label(object_id: String) -> String:
+	# The plant is the only place hidden debt is visible, and a scatter of drawn
+	# leaves over a painting reads as dust rather than as a dying plant. So the
+	# annotation observes the plant instead — which is what an annotation is for.
+	# It describes a plant; it never names the number behind it.
+	if object_id == "pothos":
+		var yellow := clampi(int(_night_visual_state("pothos").get("yellow_leaves", 0)), 0, 9)
+		if yellow >= 6:
+			return "该浇水了"
+		if yellow >= 3:
+			return "边上黄了"
+		return "看看"
+	return {
+		"corridor": "走过去",
+		"whiteboard": "走近看",
+		"fridge": "打开",
+		"mug": "拿起来",
+	}.get(object_id, "查看")
+
+
+func _draw_night_object_tile(object: Dictionary, rect: Rect2, seen: bool, focused: bool) -> void:
+	# An inspection bracket, not a card. Four corner marks sit on the object where
+	# it actually is in the room; the annotation hangs off a hairline leader, the
+	# way a note is added to a photograph in a file.
 	var object_id := str(object.get("id", ""))
-	draw_rect(Rect2(rect.position + Vector2(1, rect.size.y - 35), Vector2(rect.size.x - 2, 34)), Color(0.025, 0.075, 0.09, 0.86))
-	_draw_night_authored_visual(object_id, Rect2(rect.position + Vector2(7, 6), Vector2(rect.size.x - 14, rect.size.y - 42)), false)
-	_draw_text_centered(str(object.get("label", object.get("name", "物件"))), Rect2(rect.position + Vector2(0, rect.size.y - 33), Vector2(rect.size.x, 16)), 11, COLD_30 if seen else COLD_10, 2.0)
+	var hovered := rect.has_point(mouse_position)
+	var live := focused or hovered
+	var frame := Rect2(rect.position + Vector2(16, 8), Vector2(rect.size.x - 32, rect.size.y - 44))
+	var tone := BLUE.lightened(0.34) if live else (GREEN_BRIGHT if seen else COLD_30)
+	var strength: float = 1.0 if live else (0.62 if seen else 0.38)
+	var arm := 15.0
+	var width: float = 2.0 if live else 1.0
+	for corner: Vector2 in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
+		var anchor: Vector2 = frame.position + frame.size * corner
+		var dx: float = arm * (1.0 if corner.x < 0.5 else -1.0)
+		var dy: float = arm * (1.0 if corner.y < 0.5 else -1.0)
+		draw_line(anchor, anchor + Vector2(dx, 0), Color(tone, strength), width)
+		draw_line(anchor, anchor + Vector2(0, dy), Color(tone, strength), width)
+	if live:
+		draw_rect(frame, Color(tone, 0.07))
+	var label := str(object.get("label", object.get("name", "物件")))
+	var progress := _night_object_progress_label(object_id)
+	if progress.is_empty():
+		progress = _night_object_action_label(object_id)
+	var caption := "%s  ·  %s" % [label, progress]
+	var caption_width := font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, TYPE_META).x + 20.0
+	# Below the bracket normally; above it near the floor, where the exit control
+	# and the terminal field live.
+	var below := frame.get_center().y < 460.0
+	var plate_y := (frame.end.y + 12.0) if below else (frame.position.y - 34.0)
+	var plate := Rect2(frame.get_center().x - caption_width * 0.5, plate_y, caption_width, 22.0)
+	plate.position.x = clampf(plate.position.x, 12.0, VIEW.x - caption_width - 12.0)
+	var leader_from := Vector2(frame.get_center().x, frame.end.y if below else frame.position.y)
+	draw_line(leader_from, Vector2(frame.get_center().x, plate_y if below else plate_y + 22.0), Color(tone, strength * 0.7), 1.0)
+	draw_rect(plate, Color(0.02, 0.06, 0.075, 0.86 if live else 0.70))
+	draw_rect(Rect2(plate.position, Vector2(2, plate.size.y)), Color(tone, strength))
+	_draw_text_centered(caption, plate, TYPE_META, NIGHT_TEXT if live else Color(NIGHT_TEXT, 0.80), 1.0)
 
 
 func _night_visual_state(object_id: String) -> Dictionary:
@@ -5382,7 +5422,13 @@ func _night_object_progress_label(object_id: String) -> String:
 	if night_interaction == null or not night_interaction.object_ids().has(object_id):
 		return ""
 	if night_interaction.is_object_complete(object_id):
-		return "已读取"
+		return {
+			"mug": "放回原处",
+			"window_desk": "放回原处",
+			"corridor": "走过三遍",
+			"meeting_room_d": "灯关了",
+			"terminal": "已中断",
+		}.get(object_id, "看过了")
 	var phase := str(night_interaction.object_phase(object_id))
 	if str(night_interaction.night_id) == "1" and object_id == "corridor":
 		return "%d / 3 次" % int(night_interaction.object_state(object_id).get("pass_count", 0))
@@ -5397,7 +5443,7 @@ func _night_object_progress_label(object_id: String) -> String:
 			}.get(phase, "")
 		"terminal":
 			return {"not_arrived": "靠近", "arrived": "读取", "dialogue_inspected": "聚焦", "focused": "X / Ctrl+C"}.get(phase, "")
-	return "读取"
+	return ""
 
 
 func _draw_ending() -> void:
@@ -6772,9 +6818,14 @@ func _draw_ledger_button(rect: Rect2, label: String, shortcut: String = "", vari
 			text_color = NIGHT_TEXT
 			border = COLD_50
 	if not enabled:
-		fill = DISABLED_BG
-		text_color = DISABLED_TEXT
-		border = LINE
+		if variant == "night":
+			fill = Color(0.05, 0.09, 0.10, 0.86)
+			text_color = Color(NIGHT_MUTED, 0.86)
+			border = Color(COLD_60, 0.55)
+		else:
+			fill = DISABLED_BG
+			text_color = DISABLED_TEXT
+			border = LINE
 	var hovered := enabled and rect.has_point(mouse_position)
 	var pressed := hovered and press_feedback_timer > 0.0 and rect.has_point(press_feedback_position)
 	if hovered:
@@ -7080,20 +7131,25 @@ func _layoff_social_continue_rect() -> Rect2:
 
 func _default_night_object_rect(index: int) -> Rect2:
 	var positions := [
-		Rect2(138, 122, 132, 68), Rect2(334, 288, 150, 68), Rect2(572, 122, 154, 68),
-		Rect2(812, 288, 150, 68), Rect2(1000, 450, 132, 68), Rect2(572, 450, 154, 68)
+		Rect2(200, 240, 132, 104), Rect2(400, 180, 132, 104), Rect2(700, 220, 132, 104),
+		Rect2(940, 380, 132, 104), Rect2(560, 500, 132, 104), Rect2(1060, 500, 132, 104)
 	]
 	return positions[index % positions.size()]
 
 
 func _night_object_rect(object: Dictionary, fallback_index: int) -> Rect2:
+	# Normalised positions now address the painting itself rather than an abstract
+	# floor panel, so an object sits on the thing it is.
 	var position_value = object.get("position", [])
 	if position_value is Array and position_value.size() >= 2:
 		var center := Vector2(
-			108.0 + clampf(float(position_value[0]), 0.0, 1.0) * 1064.0,
-			92.0 + clampf(float(position_value[1]), 0.0, 1.0) * 492.0
+			clampf(float(position_value[0]), 0.0, 1.0) * VIEW.x,
+			clampf(float(position_value[1]), 0.0, 1.0) * VIEW.y
 		)
-		return Rect2(center - Vector2(76.0, 36.0), Vector2(152.0, 72.0))
+		var rect := Rect2(center - Vector2(66.0, 52.0), Vector2(132.0, 104.0))
+		rect.position.x = clampf(rect.position.x, 14.0, VIEW.x - rect.size.x - 14.0)
+		rect.position.y = clampf(rect.position.y, 104.0, VIEW.y - rect.size.y - 24.0)
+		return rect
 	return _default_night_object_rect(fallback_index)
 
 

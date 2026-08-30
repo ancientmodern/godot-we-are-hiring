@@ -214,7 +214,7 @@ func _test_night_two_sequences_through_main(ui) -> void:
 	_check(not ui.night_seen.has("window_desk"), "desk remains unseen while the cup is held")
 	_arrive_at(ui, "window_desk")
 	_check(str(core.call("object_phase", "window_desk")) == "cup_replaced", "a third desk interaction routes the exact two-centimetre replacement")
-	_check(str(ui.call("_night_object_progress_label", "window_desk")) == "已读取", "desk progress becomes complete only after replacement")
+	_check(str(ui.call("_night_object_progress_label", "window_desk")) == "放回原处", "desk progress becomes complete only after replacement")
 	_check(float(Dictionary(core.call("object_state", "window_desk")).get("distance_cm", 0.0)) == 2.0, "HiringMain supplies exactly two centimetres to the core")
 	_check(ui.night_seen == ["window_desk"], "desk enters UI night_seen only at its terminal phase")
 
