@@ -1,0 +1,84 @@
+# Godot import/cache directories
+/.godot/
+/.import/
+/.mono/
+*.translation
+
+# Generated test, capture, and verification evidence
+/artifacts/
+/tests/*.log
+/tests/*.png
+/tests/*.wav
+/tests/__pycache__/
+*.py[cod]
+*.log
+
+# Local builds and exported packages
+/build/
+/builds/
+/dist/
+/exports/
+*.pck
+*.exe
+*.msi
+
+# Signing credentials and machine-local overrides
+export_credentials.cfg
+*.keystore
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system metadata
+/.vscode/
+/.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+
+# Local files that are not part of the game project
+/CON
+/Claude Setup.exe
+
+# Legacy creature-collection prototype retained locally for reference. The
+# current project entry point is hiring_main.tscn and does not use these files.
+/main.tscn
+/src/feedback_audio.gd
+/src/feedback_audio.gd.uid
+/src/game_model.gd
+/src/game_model.gd.uid
+/src/main.gd
+/src/main.gd.uid
+/tests/integration_test.gd
+/tests/integration_test.gd.uid
+/tests/model_test.gd
+/tests/model_test.gd.uid
+/tests/visual_harness.gd
+/tests/visual_harness.gd.uid
+/tests/visual_harness.tscn
+/assets/screenshots/
+/assets/art/blackthorn_imagegen_prompts.md
+/assets/art/battle_*
+/assets/art/bubbloon_*
+/assets/art/cinderkit_*
+/assets/art/creature_atlas_*
+/assets/art/mossbit_*
+/assets/art/pipkin_*
+/assets/art/player_world_*
+/assets/art/rowan_*
+/assets/art/rue_*
+/assets/art/title_blackthorn_*
+/assets/art/title_grove_*
+/assets/art/victory_blackthorn_*
+/assets/art/victory_group_*
+/assets/art/world_blackthorn_*
+/assets/art/world_meadow_*
