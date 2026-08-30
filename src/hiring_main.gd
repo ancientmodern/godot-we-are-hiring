@@ -410,7 +410,7 @@ func _create_text_inputs() -> void:
 	name_edit.placeholder_text = "提灯实验室"
 	name_edit.text = "提灯实验室"
 	name_edit.max_length = 24
-	name_edit.position = Vector2(326, 354)
+	name_edit.position = Vector2(326, 366)
 	name_edit.size = Vector2(420, 52)
 	name_edit.add_theme_font_override("font", font)
 	name_edit.add_theme_font_size_override("font_size", 20)
@@ -2999,14 +2999,17 @@ func _draw_onboarding() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.015, 0.045, 0.06, 0.08))
 	var reveal := _reveal(0.02, 0.62)
 	draw_set_transform(Vector2(0, (1.0 - reveal) * 18.0))
-	_draw_text("公司设立档案  /  00", Vector2(326, 118), 12, GREEN)
-	_draw_display_text("我们正在招人", Vector2(322, 190), 46, INK)
-	_draw_text("WE'RE HIRING", Vector2(326, 222), 12, BLUE)
-	draw_line(Vector2(326, 246), Vector2(744, 246), COLD_40, 1.0)
-	_draw_text("现在。湾区。两个人，一张显卡。", Vector2(326, 290), 18, INK)
-	_draw_text("给公司起个名字。它会记住。", Vector2(326, 326), 15, MUTED)
-	_draw_text("公司名称 / COMPANY", Vector2(326, 348), 12, MUTED)
-	_draw_folio_stamp(Rect2(630, 455, 116, 58), "待签发", GREEN, -0.055)
+	# The sheet you sign and the sheet clipped beside it now have different jobs.
+	# The form, the stamp and the signing control belong together on the document;
+	# the clipped leaf carries the fine print and the two keys, so it is a page
+	# rather than a blank rectangle with a button floating in the middle of it.
+	_draw_text("公司设立档案", Vector2(326, 118), TYPE_META, GREEN)
+	_draw_display_text("我们正在招人", Vector2(322, 190), TYPE_HERO, INK)
+	_draw_text("WE'RE HIRING", Vector2(326, 222), TYPE_META, BLUE)
+	draw_line(Vector2(326, 246), Vector2(744, 246), RULE_STRONG, 1.0)
+	_draw_display_text("现在。湾区。两个人，一张显卡。", Vector2(326, 292), TYPE_SECTION, INK)
+	_draw_text("给公司起个名字。它会记住。", Vector2(326, 332), TYPE_BODY, MUTED)
+	_draw_text("公司名称", Vector2(326, 356), TYPE_META, MUTED)
 	draw_set_transform(Vector2.ZERO)
 	var button := _onboarding_start_rect()
 	var has_save := _save_exists_or_recoverable()
@@ -3014,16 +3017,26 @@ func _draw_onboarding() -> void:
 	if has_save:
 		start_label = "确认覆盖现有档案" if new_game_confirm_pending else "另立一份公司档案"
 	var start_shortcut := _gamepad_shortcut("Y" if has_save else "A", "ENTER")
+	_draw_folio_stamp(Rect2(614, 434, 118, 54), "待签发", Color(WARM_70, 0.85), -0.075)
 	_draw_ledger_button(button, start_label, start_shortcut, "danger" if new_game_confirm_pending else ("quiet" if has_save else "primary"), true, _focus_is("onboarding", 0))
 	if has_save:
 		var continue_button := _continue_rect()
 		_draw_ledger_button(continue_button, "翻到上次停下的位置", _gamepad_shortcut("A", "ENTER"), "primary", true, _focus_is("onboarding", 1))
+	# A blank signature line, because that is what the stamp beside it is waiting
+	# for, and because the whole game is about whose name ends up on things.
+	_draw_text("签名", Vector2(326, 452), TYPE_META, MUTED)
+	draw_line(Vector2(326, 476), Vector2(746, 476), Color(RULE_STRONG, 0.9), 1.0)
+	_draw_text("附注", Vector2(838, 290), TYPE_META, MUTED)
+	draw_line(Vector2(838, 302), Vector2(1074, 302), Color(RULE_STRONG, 0.75), 1.0)
+	_draw_text("成人向职场寓言：裁员、倦怠、", Vector2(838, 328), TYPE_META, MUTED)
+	_draw_text("饮酒与心理不安。", Vector2(838, 350), TYPE_META, MUTED)
+	_draw_text("无色情或写实暴力。", Vector2(838, 380), TYPE_META, MUTED)
 	if second_run_unlocked:
-		_draw_text("桌上已经有一个不属于现在的马克杯。", Vector2(326, 556), 12, AMBER)
-		_draw_text("结局档案  %d / 7" % seen_endings.size(), Vector2(610, 556), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 136)
-	draw_line(Vector2(326, 590), Vector2(746, 590), COLD_30, 1.0)
-	_draw_text("成人向职场寓言：裁员、倦怠、饮酒与心理不安。无色情或写实暴力。", Vector2(326, 615), 12, MUTED)
-	_draw_text("F11  全屏", Vector2(1018, 663), 12, NIGHT_TEXT)
+		_draw_text("桌上已经有一个不属于现在的马克杯。", Vector2(838, 424), TYPE_META, AMBER, HORIZONTAL_ALIGNMENT_LEFT, 236)
+		_draw_text("结局档案  %d / 7" % seen_endings.size(), Vector2(838, 466), TYPE_META, MUTED)
+	draw_line(Vector2(838, 496), Vector2(1074, 496), Color(RULE_STRONG, 0.55), 1.0)
+	_draw_text("F11  全屏", Vector2(838, 520), TYPE_META, Color(MUTED, 0.8))
+	_draw_text("F1  设置", Vector2(838, 542), TYPE_META, Color(MUTED, 0.8))
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -3628,9 +3641,9 @@ func _draw_board_metric_slide(rect: Rect2) -> void:
 
 func _draw_board_org_slide(rect: Rect2, reveal: float = 1.0) -> void:
 	draw_rect(rect, COLD_00)
-	_draw_text("QUARTERLY OPERATING REVIEW  /  组织", rect.position + Vector2(48, 42), 11, GREEN)
-	_draw_display_text("组织架构", rect.position + Vector2(48, 83), 27, INK)
-	_draw_text("本季度人员流动", rect.position + Vector2(780, 77), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 150)
+	_draw_text("QUARTERLY OPERATING REVIEW", rect.position + Vector2(48, 44), TYPE_META, PAPER_GREEN)
+	_draw_display_text("组织架构", rect.position + Vector2(48, 86), TYPE_DISPLAY, INK)
+	_draw_text("本季度人员流动", rect.position + Vector2(780, 80), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 150)
 	var total_boxes := BOARD_ORG_ACTIVE_COUNT + BOARD_ORG_EXIT_COUNT
 	for index in total_boxes:
 		var row := index / 7
@@ -3647,14 +3660,20 @@ func _draw_board_org_slide(rect: Rect2, reveal: float = 1.0) -> void:
 			draw_line(anchor, Vector2(anchor.x, node.position.y), Color(0.55, 0.60, 0.57, 0.32 * node_reveal), 1.0)
 		draw_rect(node, fill)
 		draw_rect(node, edge, false, 1.0)
-		_draw_text("在职" if active else "离开", node.position + Vector2(12, 20), 9, Color(edge, node_reveal))
+		if not active:
+			# A departure is struck through, the way it is on a printed chart. The
+			# state was previously carried by colour alone, plus the word "在职"
+			# repeated thirty-one times.
+			draw_line(node.position + Vector2(8, node.size.y - 8), node.position + Vector2(node.size.x - 8, 8), Color(edge, 0.72 * node_reveal), 1.0)
 	var statement := Rect2(rect.position + Vector2(48, 430), Vector2(900, 76))
 	draw_rect(statement, COLD_05)
 	draw_line(statement.position, Vector2(statement.end.x, statement.position.y), COLD_30, 1.0)
 	draw_line(Vector2(statement.position.x, statement.end.y), statement.end, COLD_20, 1.0)
-	_draw_display_text("自然流失率 11%", statement.position + Vector2(22, 36), 23, GREEN)
-	_draw_text("低于行业中位数。", statement.position + Vector2(266, 35), 14, INK)
-	_draw_text("绿色框 %d  ·  红色框 %d" % [BOARD_ORG_ACTIVE_COUNT, BOARD_ORG_EXIT_COUNT], statement.position + Vector2(696, 34), 10, MUTED)
+	# The slide is not allowed to annotate itself. It used to print "绿色框 31 ·
+	# 红色框 6" beside the claim, which does the player's counting for them and
+	# throws away the only thing this slide is for.
+	_draw_display_text("自然流失率 11%", statement.position + Vector2(22, 38), TYPE_SECTION, INK)
+	_draw_text("低于行业中位数。", statement.position + Vector2(266, 37), TYPE_BODY, MUTED)
 
 
 func _draw_board_aftermath(rect: Rect2) -> void:
@@ -3976,29 +3995,32 @@ func _advance_layoff_social() -> void:
 
 func _draw_layoff_social() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), COLD_10)
-	_draw_text("周三 / 15:00", Vector2(54, 48), 12, MUTED)
-	_draw_display_text("你没有去公司。", Vector2(54, 92), 30, INK)
-	var process := Rect2(54, 128, 560, 494)
-	_draw_panel(process, COLD_95, MUTED, 8.0, 1.0)
-	_draw_text("LANTERN / 通知流程", process.position + Vector2(24, 32), 11, COLD_40)
+	_draw_text("周三  ·  15:00", Vector2(54, 50), TYPE_META, MUTED)
+	_draw_display_text("你没有去公司。", Vector2(54, 96), TYPE_DISPLAY, INK)
+	var process := Rect2(54, 138, 560, 484)
+	_draw_panel(process, COLD_95, Color(COLD_60, 0.8), 4.0, 1.0)
+	_draw_text("LANTERN  ·  通知流程", process.position + Vector2(24, 34), TYPE_META, COLD_40)
 	var phase := _layoff_social_phase()
 	var process_lines := _layoff_social_process_lines()
 	var process_reveal_time := screen_time if phase == "process_complete" and not reduced_motion else LAYOFF_SOCIAL_PROCESS_MIN_SECONDS
 	for i in process_lines.size():
 		var reveal_alpha := clampf((process_reveal_time - float(i) * 0.12) / 0.26, 0.0, 1.0)
-		_draw_text(process_lines[i], process.position + Vector2(24, 76 + i * 41), 13, Color(0.64, 0.78, 0.68, reveal_alpha))
+		_draw_text(process_lines[i], process.position + Vector2(24, 80 + i * 41), TYPE_LABEL, Color(0.64, 0.78, 0.68, reveal_alpha))
+	# Not a handset mockup — a lit screen. The 22px corner radius and the notch
+	# bar were the one piece of borrowed product vocabulary left in the game.
 	var phone := Rect2(704, 88, 414, 554)
-	_draw_panel(phone, COLD_00, COLD_50, 22.0, 2.0)
-	draw_rect(Rect2(phone.position + Vector2(148, 16), Vector2(118, 7)), COLD_30)
-	_draw_text("动态", phone.position + Vector2(24, 58), 12, MUTED)
+	_draw_panel(phone, COLD_00, COLD_50, 6.0, 1.0)
+	draw_line(phone.position + Vector2(0, 38), phone.position + Vector2(phone.size.x, 38), RULE_SOFT, 1.0)
+	_draw_text("15:00", phone.position + Vector2(24, 26), TYPE_META, MUTED)
+	_draw_text("动态", phone.position + Vector2(phone.size.x - 24, 26), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	if phase == "process_complete":
-		_draw_text_centered("15:00", Rect2(phone.position + Vector2(90, 190), Vector2(234, 54)), 36, COLD_80, 3.0)
-		_draw_text_centered("手机亮了一次。", Rect2(phone.position + Vector2(70, 260), Vector2(274, 38)), 13, MUTED, 3.0)
+		_draw_display_text("15:00", Rect2(phone.position + Vector2(90, 190), Vector2(234, 54)).position, TYPE_HERO, COLD_20)
+		_draw_text_centered("手机亮了一次。", Rect2(phone.position + Vector2(70, 260), Vector2(274, 38)), TYPE_LABEL, MUTED, 3.0)
 	else:
 		_draw_layoff_post(phone, phase)
 	var button := _layoff_social_continue_rect()
 	if _layoff_social_can_advance():
-		_draw_panel(button, SURFACE_DARK, GREEN, 7.0, 1.0)
+		_draw_panel(button, SURFACE_DARK, GREEN, RADIUS_CONTROL, 1.0)
 		var label: String = str({
 			"process_complete": "打开手机   ENTER",
 			"post_visible": "点个赞   ENTER",
@@ -4007,19 +4029,21 @@ func _draw_layoff_social() -> void:
 			"reliked": "放下手机   ENTER",
 		}.get(phase, "继续   ENTER"))
 		label = label.replace("ENTER", _gamepad_shortcut("A", "ENTER"))
-		_draw_text_centered(label, button, 12, Color.WHITE, 3.0)
+		_draw_text_centered(label, button, TYPE_ACTION, Color.WHITE, 3.0)
 	else:
-		_draw_panel(button, COLD_10, COLD_30, 7.0, 1.0)
-		_draw_text_centered("请稍候", button, 11, COLD_50, 3.0)
+		# A greyed-out box that says "please wait" looks like the game has stalled.
+		# Nothing is waiting on the player here, so nothing asks them to act.
+		_draw_text_centered("……", button, TYPE_BODY, Color(MUTED, 0.55), 3.0)
 
 
 func _draw_layoff_post(phone: Rect2, phase: String) -> void:
 	var avatar := phone.position + Vector2(54, 105)
 	draw_circle(avatar, 22.0, COLD_20)
-	_draw_text("前同事", phone.position + Vector2(90, 101), 12, INK)
-	_draw_text("刚刚", phone.position + Vector2(90, 123), 10, MUTED)
-	_draw_paragraph_array(["谢谢老板亲自跟我说。", "挺好的，真的。"], Rect2(phone.position + Vector2(32, 162), Vector2(phone.size.x - 64, 130)), 17, INK, 31)
-	draw_line(phone.position + Vector2(32, 314), phone.position + Vector2(phone.size.x - 32, 314), COLD_10, 1.0)
+	draw_arc(avatar, 22.0, 0.0, TAU, 32, RULE_SOFT, 1.0)
+	_draw_text("前同事", phone.position + Vector2(90, 100), TYPE_BODY, INK)
+	_draw_text("刚刚", phone.position + Vector2(90, 124), TYPE_META, MUTED)
+	_draw_paragraph_array(["谢谢老板亲自跟我说。", "挺好的，真的。"], Rect2(phone.position + Vector2(32, 162), Vector2(phone.size.x - 64, 130)), TYPE_ACTION, INK, 31)
+	draw_line(phone.position + Vector2(32, 314), phone.position + Vector2(phone.size.x - 32, 314), RULE_SOFT, 1.0)
 	var heart_state := _layoff_social_heart_visual_state(phase, screen_time)
 	var liked := bool(heart_state["filled"])
 	var heart_center := phone.position + Vector2(72, 356)
@@ -4027,14 +4051,14 @@ func _draw_layoff_post(phone: Rect2, phase: String) -> void:
 	if fading_fill_alpha > 0.0:
 		_draw_social_heart(heart_center, true, float(heart_state["scale"]), fading_fill_alpha)
 	_draw_social_heart(heart_center, liked, float(heart_state["scale"]))
-	_draw_text("41" if liked else "40", phone.position + Vector2(106, 362), 12, RED if liked else MUTED)
+	_draw_text("41" if liked else "40", phone.position + Vector2(106, 362), TYPE_LABEL, RED if liked else MUTED)
 	var state_copy: String = str({
 		"post_visible": "你看了很久。",
 		"liked_once": "赞亮了。",
 		"unliked": "赞又暗了。",
 		"reliked": "你又点了一次。",
 	}.get(phase, ""))
-	_draw_text_centered(state_copy, Rect2(phone.position + Vector2(42, 414), Vector2(phone.size.x - 84, 34)), 12, MUTED, 3.0)
+	_draw_text_centered(state_copy, Rect2(phone.position + Vector2(42, 414), Vector2(phone.size.x - 84, 34)), TYPE_LABEL, MUTED, 3.0)
 
 
 func _layoff_social_heart_visual_state(phase: String, phase_time: float) -> Dictionary:
@@ -4066,7 +4090,10 @@ func _draw_social_heart(center: Vector2, filled: bool, scale: float = 1.0, alpha
 		draw_circle(center + Vector2(7, -5) * scale, 8.5 * scale, color)
 		draw_colored_polygon(PackedVector2Array([center + Vector2(-15, -4) * scale, center + Vector2(15, -4) * scale, center + Vector2(0, 18) * scale]), color)
 	else:
-		draw_polyline(PackedVector2Array([center + Vector2(-15, -4) * scale, center + Vector2(-7, -13) * scale, center, center + Vector2(7, -13) * scale, center + Vector2(15, -4) * scale, center + Vector2(0, 18) * scale, center + Vector2(-15, -4) * scale]), color, 2.0 * scale, true)
+		var outline := PackedVector2Array()
+		for point: Vector2 in [Vector2(0, 17), Vector2(-9, 7), Vector2(-15, -1), Vector2(-15, -8), Vector2(-10, -13), Vector2(-4, -12), Vector2(0, -7), Vector2(4, -12), Vector2(10, -13), Vector2(15, -8), Vector2(15, -1), Vector2(9, 7), Vector2(0, 17)]:
+			outline.append(center + point * scale)
+		draw_polyline(outline, color, 2.0 * scale, true)
 
 
 func _draw_terminal() -> void:
@@ -5462,27 +5489,30 @@ func _draw_ending() -> void:
 	draw_rect(Rect2(ending_sheet.position + Vector2(10, 12), ending_sheet.size), Color(0.005, 0.02, 0.025, 0.28 * reveal))
 	draw_rect(ending_sheet, Color(0.95, 0.925, 0.85, 0.95))
 	draw_rect(ending_sheet, WARM_40, false, 1.0)
-	draw_rect(Rect2(ending_sheet.position, Vector2(7, ending_sheet.size.y)), _ending_accent_color())
-	draw_rect(Rect2(ending_sheet.position + Vector2(368, -5), Vector2(92, 12)), Color(0.64, 0.65, 0.60, 0.86))
+	# The spine is a binding, not a highlight: 4px of the ending's own colour,
+	# and the tape above it translucent like every other sheet in the game.
+	draw_rect(Rect2(ending_sheet.position, Vector2(4, ending_sheet.size.y)), Color(_ending_accent_color(), 0.9))
+	var ending_tape := Rect2(ending_sheet.position + Vector2(368, -5), Vector2(92, 11))
+	draw_rect(ending_tape, Color(WARM_10, 0.34))
+	draw_line(ending_tape.position, ending_tape.position + Vector2(92, 0), Color(COLD_00, 0.30), 1.0)
 	var name := str(current_ending.get("title", current_ending.get("name", current_ending_id)))
-	_draw_text("COMPANY ARCHIVE  /  %s" % str(model.company_name), ending_sheet.position + Vector2(46, 43), 11, GREEN)
-	_draw_text("ENDING / %02d" % (abs(current_ending_id.hash()) % 97), ending_sheet.position + Vector2(ending_sheet.size.x - 202, 43), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 156)
+	_draw_text("公司档案  ·  %s" % str(model.company_name), ending_sheet.position + Vector2(46, 44), TYPE_META, PAPER_GREEN)
+	_draw_text("结局归档  %02d" % (abs(current_ending_id.hash()) % 97), ending_sheet.position + Vector2(ending_sheet.size.x - 202, 44), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 156)
 	draw_line(ending_sheet.position + Vector2(46, 58), ending_sheet.position + Vector2(ending_sheet.size.x - 46, 58), WARM_40, 1.0)
-	_draw_display_text(name, ending_sheet.position + Vector2(46, 116), 42, INK)
+	_draw_display_text(name, ending_sheet.position + Vector2(46, 118), TYPE_HERO, INK)
 	var pages := _ending_pages()
 	var body: Array = pages[clampi(ending_page, 0, maxi(0, pages.size() - 1))]
 	_draw_paragraph_array(_to_string_array(body), Rect2(ending_sheet.position + Vector2(46, 148), Vector2(ending_sheet.size.x - 92, 410)), 16, INK, 27)
-	_draw_folio_stamp(Rect2(ending_sheet.end.x - 184, ending_sheet.position.y + 78, 132, 48), "已归档", _ending_accent_color(), -0.024)
+	_draw_folio_stamp(Rect2(ending_sheet.end.x - 184, ending_sheet.position.y + 82, 132, 48), "已归档", Color(WARM_70, 0.9), -0.024)
 	_draw_ending_motif(Rect2(930, 146, 270, 378))
 	var restart := _ending_restart_rect()
 	var ending_button := "下一页  %d / %d   ENTER" % [ending_page + 1, pages.size()] if ending_page + 1 < pages.size() else "回到 2024 年 3 月   ENTER"
 	ending_button = ending_button.replace("ENTER", _gamepad_shortcut("A", "ENTER"))
-	draw_rect(restart, Color(0.16, 0.24, 0.21, 0.90))
-	draw_line(restart.position, Vector2(restart.end.x, restart.position.y), _ending_accent_color(), 2.0)
-	draw_line(Vector2(restart.position.x, restart.end.y), restart.end, COLD_50, 1.0)
-	_draw_text("归档操作", restart.position + Vector2(18, 29), TYPE_META, COLD_30)
-	_draw_text(ending_button, restart.position + Vector2(138, 30), 13, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, restart.size.x - 158)
-	_draw_text("它记住了。", Vector2(1036, 650), 11, COLD_10)
+	draw_rect(restart, Color(WARM_10, 0.55))
+	draw_line(restart.position, Vector2(restart.end.x, restart.position.y), Color(_ending_accent_color(), 0.85), 1.0)
+	_draw_text("归档操作", restart.position + Vector2(18, 30), TYPE_META, MUTED)
+	_draw_text(ending_button, restart.position + Vector2(138, 30), TYPE_LABEL, INK, HORIZONTAL_ALIGNMENT_RIGHT, restart.size.x - 158)
+	_draw_text("它记住了。", Vector2(1000, 556), TYPE_META, COLD_10, HORIZONTAL_ALIGNMENT_CENTER, 130)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -5504,46 +5534,30 @@ func _draw_ending_motif(rect: Rect2) -> void:
 		motif_texture = art_office_night
 	elif current_ending_id in ["second_time", "independent", "successor"]:
 		motif_texture = art_title
-	_draw_texture_cover(motif_texture, rect, Color(0.80, 0.86, 0.85, 1.0), Vector2(0.58, 0.52))
-	draw_rect(rect, Color(0.015, 0.05, 0.065, 0.30))
+	# Each ending files a different detail of the same room. Varying the crop says
+	# more than the procedural glyphs it replaces — stacks of blank rectangles and
+	# rows of lines that read as scan artefacts rather than as evidence.
+	var anchor: Vector2 = {
+		"rm_rf": Vector2(0.62, 0.80),
+		"lights_out": Vector2(0.44, 0.36),
+		"drift": Vector2(0.30, 0.55),
+		"independent": Vector2(0.70, 0.62),
+		"successor": Vector2(0.20, 0.44),
+		"acquihire": Vector2(0.84, 0.50),
+		"second_time": Vector2(0.52, 0.74),
+	}.get(current_ending_id, Vector2(0.58, 0.52))
+	_draw_texture_cover(motif_texture, rect, Color(0.86, 0.91, 0.90, 1.0), anchor)
+	draw_rect(rect, Color(0.015, 0.05, 0.065, 0.22))
 	draw_rect(rect, Color("#72868a"), false, 1.0)
-	draw_rect(Rect2(rect.position + Vector2(42, -5), Vector2(72, 13)), Color(0.72, 0.70, 0.61, 0.88))
+	var motif_tape := Rect2(rect.position + Vector2(42, -5), Vector2(72, 12))
+	draw_rect(motif_tape, Color(WARM_10, 0.34))
+	draw_line(motif_tape.position, motif_tape.position + Vector2(72, 0), Color(COLD_00, 0.28), 1.0)
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x, 58)), Color(0.02, 0.07, 0.085, 0.84))
-	draw_rect(Rect2(rect.position, Vector2(6, rect.size.y)), _ending_accent_color())
-	_draw_text("证据照片 / 公司档案", rect.position + Vector2(22, 25), TYPE_META, Color("#c9dcda"))
-	_draw_text("影像 %02d" % (abs(current_ending_id.hash()) % 97), rect.position + Vector2(22, 45), TYPE_META, Color.WHITE)
-	var center := rect.get_center() + Vector2(0, 28)
-	match current_ending_id:
-		"rm_rf":
-			var terminal_evidence := Rect2(center - Vector2(66, 50), Vector2(132, 100))
-			draw_rect(terminal_evidence, Color(0.02, 0.06, 0.075, 0.90))
-			draw_rect(terminal_evidence, Color("#657c83"), false, 1.0)
-			for i in 5:
-				draw_line(center + Vector2(-48, -32 + i * 15), center + Vector2(38 - (i % 2) * 18, -32 + i * 15), TERMINAL_TEXT, 2.0)
-		"lights_out":
-			for i in 4:
-				draw_line(center + Vector2(-68, -46 + i * 28), center + Vector2(68, -46 + i * 28), Color(0.52, 0.70, 0.74, 0.78), 2.0)
-		"independent":
-			var independent_leaf := Rect2(center - Vector2(64, 64), Vector2(128, 128))
-			draw_rect(independent_leaf, Color(0.94, 0.94, 0.89, 0.88))
-			draw_rect(independent_leaf, Color("#bba98c"), false, 1.0)
-			for i in 6:
-				draw_line(center + Vector2(-46, -42 + i * 16), center + Vector2(42 - (i % 3) * 10, -42 + i * 16), Color("#71848b"), 1.0)
-			draw_circle(center + Vector2(45, 48), 9.0, GREEN)
-		"successor":
-			for i in 4:
-				var successor_leaf := Rect2(center + Vector2(-68 + i * 22, -58 + i * 18), Vector2(92, 112))
-				draw_rect(successor_leaf, Color(0.92, 0.95, 0.93, 0.86))
-				draw_rect(successor_leaf, Color("#a8b5b8"), false, 1.0)
-		"second_time":
-			_draw_cup_icon(center, 2.2, Color("#e3ded3"), Color("#ad7252"))
-		_:
-			for i in 3:
-				var badge := Rect2(center + Vector2(-68 + i * 49, -42), Vector2(38, 90))
-				draw_rect(badge, Color(0.89, 0.93, 0.91, 0.86))
-				draw_rect(badge, Color("#9faeb1"), false, 1.0)
+	draw_rect(Rect2(rect.position, Vector2(3, rect.size.y)), Color(_ending_accent_color(), 0.9))
+	_draw_text("证据照片 · 公司档案", rect.position + Vector2(22, 26), TYPE_META, Color("#c9dcda"))
+	_draw_text("影像 %02d" % (abs(current_ending_id.hash()) % 97), rect.position + Vector2(22, 46), TYPE_META, Color.WHITE)
 	draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - 46), Vector2(rect.size.x, 46)), Color(0.015, 0.05, 0.065, 0.84))
-	_draw_text_centered("归档证据 / %02d" % (abs(current_ending_id.hash()) % 97), Rect2(rect.position + Vector2(12, rect.size.y - 35), Vector2(rect.size.x - 24, 22)), 10, Color("#c8d7d6"), 2.0)
+	_draw_text_centered("归档证据  %02d" % (abs(current_ending_id.hash()) % 97), Rect2(rect.position + Vector2(12, rect.size.y - 35), Vector2(rect.size.x - 24, 22)), TYPE_META, Color("#c8d7d6"), 2.0)
 
 
 func _draw_workspace_background() -> void:
@@ -5663,10 +5677,10 @@ func _draw_settings_overlay() -> void:
 	draw_rect(panel, COLD_40, false, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(7, panel.size.y)), GREEN)
 	draw_rect(Rect2(panel.position + Vector2(242, -5), Vector2(88, 12)), COLD_30)
-	_draw_text("CONTROL SHEET  /  LOCAL", panel.position + Vector2(34, 34), 11, GREEN)
-	_draw_display_text("设置与辅助", panel.position + Vector2(34, 75), 28, INK)
-	_draw_text("这些选项会保存在本机，不会改写战役选择。", panel.position + Vector2(34, 103), 12, MUTED)
-	_draw_folio_stamp(Rect2(panel.end.x - 154, panel.position.y + 27, 118, 48), "PAUSED", GREEN, -0.02)
+	_draw_text("控制单", panel.position + Vector2(34, 36), TYPE_META, PAPER_GREEN)
+	_draw_display_text("设置与辅助", panel.position + Vector2(34, 78), TYPE_DISPLAY, INK)
+	_draw_text("这些选项会保存在本机，不会改写战役选择。", panel.position + Vector2(34, 106), TYPE_LABEL, MUTED)
+	_draw_folio_stamp(Rect2(panel.end.x - 154, panel.position.y + 30, 118, 48), "已暂停", Color(WARM_70, 0.9), -0.02)
 	draw_line(panel.position + Vector2(34, 127), panel.position + Vector2(panel.size.x - 34, 127), COLD_30, 1.0)
 	_draw_settings_row(_settings_motion_rect(), "降低动态效果", "关闭滑入、脉冲与长时间静默等待", reduced_motion, _focus_is("settings", 0))
 	_draw_settings_row(_settings_audio_rect(), "全部声音", "环境 / 配乐 / 物理拟音", office_audio != null and not office_audio.muted, _focus_is("settings", 1))
@@ -5674,7 +5688,7 @@ func _draw_settings_overlay() -> void:
 	_draw_settings_row(_settings_fullscreen_rect(), "全屏显示", "也可随时按 F11", fullscreen_on, _focus_is("settings", 2))
 	var guide := Rect2(panel.position + Vector2(34, 363), Vector2(panel.size.x - 68, 116))
 	draw_line(guide.position, guide.position + Vector2(guide.size.x, 0), COLD_30, 1.0)
-	_draw_text("手柄 / 键盘速查", guide.position + Vector2(0, 25), TYPE_META, INK)
+	_draw_text("手柄 / 键盘速查", guide.position + Vector2(0, 25), TYPE_META, MUTED)
 	_draw_text("D-pad 选项   A 确认 / 亲自   X 委派   Y 结束周", guide.position + Vector2(0, 50), TYPE_META, MUTED)
 	_draw_text("LB / RB 翻档   B 返回   START 设置", guide.position + Vector2(0, 72), TYPE_META, MUTED)
 	_draw_text("夜班：D-pad 选择，A 交互，终端 X 中断", guide.position + Vector2(0, 94), TYPE_META, MUTED)
@@ -5692,21 +5706,22 @@ func _draw_settings_row(rect: Rect2, title: String, description: String, enabled
 	if enabled:
 		draw_rect(Rect2(rect.position, Vector2(3, rect.size.y)), GREEN)
 	draw_line(Vector2(rect.position.x, rect.end.y), rect.end, COLD_30, 1.0)
-	_draw_text(title, rect.position + Vector2(18, 26), 13, INK)
-	_draw_text(description, rect.position + Vector2(18, 48), TYPE_META, MUTED)
-	var toggle := Rect2(rect.end - Vector2(72, 45), Vector2(52, 26))
-	# Two separate stamp boxes read as a paper register, not a number spinner or
-	# software pill. The chosen state is the only solid impression.
-	var off_cell := Rect2(toggle.position + Vector2(1, 2), Vector2(22, 22))
-	var on_cell := Rect2(toggle.position + Vector2(29, 2), Vector2(22, 22))
-	draw_rect(off_cell, WARM_10)
-	draw_rect(on_cell, WARM_10)
-	draw_rect(off_cell, COLD_40, false, 1.0)
-	draw_rect(on_cell, COLD_40, false, 1.0)
+	_draw_text(title, rect.position + Vector2(18, 28), TYPE_BODY, INK)
+	_draw_text(description, rect.position + Vector2(18, 52), TYPE_META, MUTED)
+	# A register box you tick, at a size a finger could find. Two 22x22 cells is
+	# the smallest control in the game and it read as debug UI, which is not what
+	# a control sheet on a desk looks like.
+	var toggle := Rect2(rect.end - Vector2(122, 54), Vector2(102, 34))
+	var off_cell := Rect2(toggle.position, Vector2(51, 34))
+	var on_cell := Rect2(toggle.position + Vector2(51, 0), Vector2(51, 34))
+	draw_rect(toggle, WARM_05)
 	var active_cell := on_cell if enabled else off_cell
-	draw_rect(active_cell.grow(-2.0), GREEN if enabled else COLD_60)
-	_draw_text_centered("关", off_cell, TYPE_META, COLD_05 if not enabled else MUTED, 1.0)
-	_draw_text_centered("开", on_cell, TYPE_META, COLD_05 if enabled else MUTED, 1.0)
+	draw_rect(active_cell, Color(GREEN if enabled else COLD_50, 0.16))
+	draw_rect(Rect2(active_cell.position + Vector2(0, active_cell.size.y - 2), Vector2(active_cell.size.x, 2)), GREEN if enabled else COLD_50)
+	draw_rect(toggle, RULE_STRONG, false, 1.0)
+	draw_line(on_cell.position, on_cell.position + Vector2(0, 34), RULE_STRONG, 1.0)
+	_draw_text_centered("关", off_cell, TYPE_LABEL, INK if not enabled else MUTED, 1.0)
+	_draw_text_centered("开", on_cell, TYPE_LABEL, INK if enabled else MUTED, 1.0)
 
 
 func _open_settings() -> void:
@@ -6784,9 +6799,8 @@ func _draw_paper_card(rect: Rect2, fill: Color, border: Color, radius: float, sh
 func _draw_folio_stamp(rect: Rect2, label: String, color: Color, angle: float = 0.0) -> void:
 	var local_rect := Rect2(-rect.size * 0.5, rect.size)
 	draw_set_transform(rect.get_center(), angle)
-	_draw_panel(local_rect, Color(color, 0.035), Color(color, 0.82), 1.0, 1.5)
-	_draw_panel(local_rect.grow(-4.0), Color.TRANSPARENT, Color(color, 0.42), 1.0, 1.0)
-	_draw_text_centered(label, local_rect, 12, Color(color, 0.92), 2.0)
+	_draw_panel(local_rect, Color(color, 0.045), Color(color, 0.62), 1.0, 2.0)
+	_draw_text_centered("  ".join(label.split()) if label.contains(" ") else label, local_rect, TYPE_LABEL, Color(color, 0.78), 2.0)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -6973,11 +6987,11 @@ func _wrap_text_px(text: String, max_width: float, size: int) -> Array[String]:
 
 
 func _onboarding_start_rect() -> Rect2:
-	return Rect2(812, 438, 300, 52)
+	return Rect2(478, 508, 268, 52)
 
 
 func _continue_rect() -> Rect2:
-	return Rect2(812, 504, 300, 48)
+	return Rect2(478, 574, 268, 48)
 
 
 func _settings_button_rect() -> Rect2:

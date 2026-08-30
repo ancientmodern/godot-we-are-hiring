@@ -68,7 +68,10 @@ TEAM_READABILITY_STEMS = (
 DASHBOARD_CLEAN_PATCHES: dict[str, Rect] = {
     "main": (310, 574, 752, 582),
     "toolbar": (785, 108, 925, 122),
-    "detail": (794, 342, 1126, 392),
+    # A vertical strip in the detail sheet's right margin. The former horizontal
+    # band relied on the middle of that panel staying empty, which stopped being
+    # true once the action note filled it with the copy it is there to carry.
+    "detail": (1126, 210, 1140, 560),
     "stats": (310, 655, 1130, 662),
 }
 TEAM_CLEAN_PATCHES: dict[str, Rect] = {
