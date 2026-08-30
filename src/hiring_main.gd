@@ -1934,9 +1934,9 @@ func _append_first_week_settlement(lines: Array[String]) -> void:
 	var name_choice := str(model.memory.get("garage_name_choice", "pragmatic"))
 	match name_choice:
 		"warm": lines.append("门上的纸角又翘起来。林越按住它：『名字还行。人也还在。』")
-		"wry": lines.append("林越在白板角落写：‘新建文件夹 / Week 1 / 未倒闭’。然后划掉了前四个字。")
+		"wry": lines.append("林越在白板角落写：『新建文件夹 / Week 1 / 未倒闭』。然后划掉了前四个字。")
 		"skipped": lines.append("门上的纸角又翘起来。林越按平它，没有替你补上那段没说完的话。")
-		_: lines.append("墨还没买，门也没换。林越在 A4 纸背面写下：‘Week 1 / 还在。’")
+		_: lines.append("墨还没买，门也没换。林越在 A4 纸背面写下：『Week 1 / 还在。』")
 
 
 func _close_result() -> void:
@@ -4160,15 +4160,19 @@ func _layoff_social_process_lines() -> Array[String]:
 		var line := str(line_value)
 		if line.begins_with(">"):
 			process_lines.append(line)
-	if not process_lines.is_empty():
-		return process_lines
-	return [
-		"> 通知流程已完成。",
-		"> 我安排了当面。六场，都在会议室 C，间隔二十分钟。",
-		"> 我用了你的语气。",
-		"> 他们都以为是你写的。",
-		"> 这对他们来说更好。",
-	]
+	if process_lines.is_empty():
+		process_lines = [
+			"> 通知流程已完成。",
+			"> 我安排了当面。六场，都在会议室 C，间隔二十分钟。",
+			"> 我用了你的语气。",
+			"> 他们都以为是你写的。",
+			"> 这对他们来说更好。",
+		]
+	# For a founder who left a company where a person once asked them for exactly
+	# this, the machine adds one more operational detail and no comment on it.
+	if model != null and str(model.origin_id) == "bigco" and bool(model.flags.get("origin_prologue_seen", false)):
+		process_lines.append("> 二十分钟刚好够一个人把东西收拾完，离开这一层。")
+	return process_lines
 
 
 func _advance_layoff_social() -> void:
@@ -6111,6 +6115,30 @@ func _ending_pages() -> Array:
 	return _paginate_paragraphs(body, 13, 850.0, 16)
 
 
+func _origin_ending_echo() -> String:
+	# Every ending closes on the thing that was already true before week one. It
+	# reports a fact and stops; the endings do their own summing up, and none of
+	# them needs a background telling the player what it all meant.
+	if model == null:
+		return ""
+	match str(model.origin_id):
+		"bigco":
+			match str(model.memory.get("bigco_exit", "")):
+				"one_line":
+					return "上一家公司的那份文档被撤回了。那十一分钟里打开过它的四十个人，你一个都没有再联系过。"
+				"hand_back":
+					return "上一家公司的那份公告还挂在共享盘里，署名是『公司』。你偶尔还会想，里面哪一句原本是你的。"
+				"write_it":
+					return "上一家公司的那份公告还挂在共享盘里，署名是你。你已经很久没有再读过它。"
+				_:
+					return "上一家公司这几年换了两轮 leader。没有人会记得那份文档。"
+		"serial":
+			return "这是你的第二家公司。第一家的主体还挂在你名下，每年报税的时候会提醒你一次。"
+		"funded":
+			return "你母亲到现在也没有问过这家公司在做什么。她只问你有没有好好吃饭。"
+	return ""
+
+
 func _render_ending_body(raw_body: Variant) -> Array[String]:
 	var rendered: Array[String] = []
 	var entries: Array = raw_body if raw_body is Array else [raw_body]
@@ -6128,6 +6156,9 @@ func _render_ending_body(raw_body: Variant) -> Array[String]:
 			paragraph = str(entry_value)
 		if not paragraph.is_empty():
 			rendered.append(_interpolate_ending_text(paragraph))
+	var origin_echo := _origin_ending_echo()
+	if not origin_echo.is_empty():
+		rendered.append(origin_echo)
 	var lin_echo := _lin_ending_echo()
 	if not lin_echo.is_empty():
 		rendered.append(lin_echo)

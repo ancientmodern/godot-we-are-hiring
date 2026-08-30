@@ -77,8 +77,13 @@
 | WORLD-009 | Verified | `src/hiring_content.gd` anomaly reaction/night desk copy；无调查 action | C2795 anomaly/night registry；N173 night paths | V81 night desk/window sequence | 无 |
 | WORLD-010 | Verified | `src/hiring_content.gd` key `live_demo` AI branch exact “我们”停顿线索 | C2795 required terms；F2117 live-demo routes | — | 无 |
 | WORLD-011 | Verified | `src/hiring_model.gd` Lin employee；`src/hiring_content.gd` Lin scene registry | C2795 employee/Lin registry；F2117 full campaign | V81 team screenshots | 无 |
+| WORLD-014 | Verified | `src/hiring_main.gd::_lin_relationship_seed` 持久关系维度；`src/hiring_content.gd` 开场回应 | O38 `_test_authored_relationship_opening` 断言 warmth/chemistry/shared_values 分别记账并存档往返；M1940 `public_state` 不含 `lin_relationship` | V87 opening_event / prologue captures | 无；无好感度条，恋爱线未解锁，未来系统仍须同时检查信任与边界 |
 | WORLD-012 | Verified | `src/hiring_content.gd` Lin dialogue corpus and metadata | C2795 `_test_lin_tone_lint`；SEM1549；`docs/editorial_review.md::WORLD-012` | V81 林越事件与肖像状态 | 无；v1 角色语气已通过编辑审读 |
 | WORLD-013 | Verified | `src/hiring_content.gd` `lin_scene_1..4`,`lin_last_visit`,`lin_absent_echo` | C2795 reachability；F2117 Lin presence/absence routes | — | 无 |
+| LIFEPATH-001 | Verified | `src/hiring_content.gd::ORIGINS`,`PROLOGUES`；`src/hiring_main.gd::_open_origin_prologue` | LP245 节拍数、提问次数、收束拍断言；U630 序章不解析导演键并原样交出车库事件 | V87 `prologue_bigco_align`,`prologue_bigco_exit`,`prologue_serial_postmortem`,`prologue_funded_money` | 无 |
+| LIFEPATH-002 | Verified | `src/hiring_content.gd` `{{lin_history}}` + `history_lines`；`1:4`/`2:6`/`3:7` 的 `origin ==` 选项；`src/hiring_director.gd::_condition_atom` | LP245 占位展开、三条过去互不相同、跨出身选项不可见；O38 车库正文按出身展开 | V87 opening_event | 无 |
+| LIFEPATH-003 | Verified | `src/hiring_model.gd::origin_weekly_burn_multiplier`,`origin_id` 持久化 | LP245 起始现金相同、45 周后差值 ≥6 周、旧存档回落默认出身 | — | 无 |
+| LIFEPATH-004 | Verified | `src/hiring_content.gd` 各 `origin_*` 选项的 effects 与 result | LP245 逐条断言代价或非最优、result 非空、非委托路线 | — | 无 |
 | TONE-001 | Verified | `src/hiring_content.gd` office/night copy；`src/office_audio.gd` 克制 ambience/score/foley 图谱 | C2795 anomaly lint；SEM1549；A275 低电平稀疏动机、物理拟音余量与异常/静默无 cue；N173/NU115 idle invariants；`docs/editorial_review.md` | IDLE；WAV；V81 debt/night captures | 无；内部联合预检通过，首玩联想另由 ACCEPT-005 承接 |
 | TONE-002 | Unverified | 目标由当前内容支持，但无玩家研究 | 自动化不能验证“认出来了” | — | 必须由 ACCEPT-005 首次玩家访谈验证 |
 | SURREAL-001 | Verified | `src/hiring_content.gd::ANOMALY_REGISTRY` leased-office locations | C2795 `_test_anomaly_registry_and_external_boundary` | V81 咖啡馆/办公室对照 | 无 |

@@ -44,7 +44,7 @@ const CHAPTERS: Array[Dictionary] = [
 		"model_official": "lantern-v1",
 		"model_nickname": "阿灯",
 		"team_target": 9,
-		"intention": "第一次还债。第一次点「让它来写」。",
+		"intention": "第一次还债。第一次点『让它来写』。",
 	},
 	{
 		"id": 3,
@@ -177,7 +177,7 @@ const MEMORY_CALLBACKS: Array[Dictionary] = [
 const ACTIONS: Dictionary = {
 	"tweet": {
 		"id": "tweet", "name": "发一条推", "category": "narrative", "unlock_chapter": 1,
-		"attention": 1, "description": "一句话和一张截图。叙事 +5~9。",
+		"attention": 1, "description": "一句话和一张截图。",
 		"effects": {"narrative": [5, 9]},
 		"ai_effects": {"author_weight": 2},
 	},
@@ -225,7 +225,7 @@ const ACTIONS: Dictionary = {
 	},
 	"clean_data": {
 		"id": "clean_data", "name": "清洗数据", "category": "capability", "unlock_chapter": 0,
-		"attention": 1, "description": "之后三次训练效率 +50%。",
+		"attention": 1, "description": "把脏的那部分挑出来。接下来三次训练会顺很多。",
 		"effects": {"training_boost_uses": 3},
 		"ai_effects": {"author_weight": 2},
 	},
@@ -262,13 +262,13 @@ const ACTIONS: Dictionary = {
 	},
 	"one_on_one": {
 		"id": "one_on_one", "name": "一对一", "category": "team", "unlock_chapter": 1,
-		"attention": 1, "description": "士气 +20。你会知道一些你不想知道的事。",
+		"attention": 1, "description": "你会知道一些你不想知道的事。",
 		"effects": {}, "ai_effects": {"author_weight": 3},
 		"resolution_event": "one_on_one_reveal",
 	},
 	"all_hands": {
 		"id": "all_hands", "name": "全员会", "category": "team", "unlock_chapter": 1,
-		"attention": 1, "description": "全员士气 +8；若和近期行为矛盾，连贯 -12。",
+		"attention": 1, "description": "站在所有人面前，把这一周说成一件事。说的和做的对不上时，他们听得出来。",
 		"effects": {"morale": 8, "coherence_if_contradiction": -12},
 		"ai_effects": {"author_weight": 3},
 	},
@@ -286,7 +286,7 @@ const ACTIONS: Dictionary = {
 	},
 	"raise_salary": {
 		"id": "raise_salary", "name": "涨薪", "category": "team", "unlock_chapter": 2,
-		"attention": 1, "description": "士气 +25，之后烧钱更快。",
+		"attention": 1, "description": "他们会高兴一阵子。账上会一直记得。",
 		"effects": {"morale": 25, "burn_rate": 1},
 		"ai_effects": {"author_weight": 4},
 	},
@@ -310,13 +310,13 @@ const ACTIONS: Dictionary = {
 	},
 	"contract": {
 		"id": "contract", "name": "接一个外包项目", "category": "operations", "unlock_chapter": 2,
-		"attention": 1, "description": "现金增加，本周无法训练，士气 -10。",
+		"attention": 1, "description": "接一单能立刻结算的活。这一周不会有训练。",
 		"effects": {"cash_weeks": 6, "morale": -10, "block_training": 1},
 		"ai_effects": {"author_weight": 4},
 	},
 	"do_nothing": {
 		"id": "do_nothing", "name": "什么都不做", "category": "operations", "unlock_chapter": 0,
-		"attention": 1, "description": "士气 +3。永远在牌池里，直到某一周你真的选它。",
+		"attention": 1, "description": "永远在牌池里，直到某一周你真的选它。",
 		"effects": {"morale": 3},
 		"ai_effects": {"author_weight": 2},
 	},
@@ -585,7 +585,7 @@ const PROLOGUES: Dictionary = {
 				],
 			},
 			{
-				"id": "rewrite", "title": "更像这家公司会说的话", "speaker": "文档",
+				"id": "rewrite", "title": "重写", "speaker": "文档",
 				"scene": "boardroom", "place": "上一家公司 · 共享文档", "evidence": ["方案 v7", "最后修改人：不是你"],
 				"variant_memory_key": "bigco_align",
 				"body_variants": {
@@ -647,6 +647,8 @@ const PROLOGUES: Dictionary = {
 					"HRBP 在茶水间找到你：『公告还是你来写吧。』",
 					"『你的语气大家更信。』",
 					"她说这句话的时候是真诚的。",
+					"模板已经建好了，标题是《关于组织优化的说明》。",
+					"正文里只有一个空。",
 				],
 				"memory_key": "bigco_exit",
 				"responses": [
@@ -682,7 +684,7 @@ const PROLOGUES: Dictionary = {
 				},
 				"body": [
 					"第二天你把工牌放在周航桌上。他不在工位。",
-					"你在楼下站了一会儿，等一个不会来的人叫住你。",
+					"你在楼下站了一会儿。没有人叫住你，你也没有真的在等。",
 				],
 				"continue": "走出去", "advance_foley": "door",
 			},
@@ -695,6 +697,7 @@ const PROLOGUES: Dictionary = {
 					"『还做不做？』",
 					"后面跟着一张截图：第 47 题的失败记录。",
 					"你站在雨里把那张图读完了。",
+					"你没有问她这一年过得怎么样。她也没有问你。",
 				],
 				"continue": "回『做』", "complete": true,
 			},
@@ -770,7 +773,8 @@ const PROLOGUES: Dictionary = {
 					"十一次之后你数了一下：没有一次进入过第二轮。",
 					"有一次在行业会议上，台上的人举了一个反面例子。",
 					"他没有说公司名，只说了『那个做对话的』。",
-					"台下有人笑。你也笑了——坐在第三排不笑会很奇怪。",
+					"台下有人笑。你也笑了。",
+					"坐在第三排不笑会很奇怪。",
 				],
 				"continue": "散场后留在座位上", "advance_foley": "page",
 			},
@@ -782,7 +786,7 @@ const PROLOGUES: Dictionary = {
 					"第 1 页写着一句很大的话。第 9 页是你唯一想给人看的那张图。",
 					"没有人翻到第 9 页。",
 					"你把第 1 页删掉，又粘了回去。",
-					"你知道它有用。你也知道它没有一个字是真的。",
+					"你知道第 1 页有用。你也知道那一页上没有一个字是你做出来的。",
 				],
 				"memory_key": "serial_deck",
 				"responses": [
@@ -822,8 +826,7 @@ const PROLOGUES: Dictionary = {
 					"毕业那年的春节，饭桌上十一个人，其中八个姓一样的姓。",
 					"你说你想做点自己的东西。",
 					"你母亲说：好啊，先玩两年也可以。",
-					"她没有嘲讽的意思。这才是问题。",
-					"她是真心觉得，你做什么都不要紧。",
+					"她没有嘲讽的意思。她是真心觉得，你做什么都不要紧。",
 				],
 				"memory_key": "funded_dinner",
 				"responses": [
@@ -846,7 +849,8 @@ const PROLOGUES: Dictionary = {
 					"你把它们放进一个文件夹，三个月没打开。",
 					"你不是在挑。你是发现挑哪一个都一样：",
 					"哪一个都不会改变你明年住在哪儿、吃什么、几点睡。",
-					"室友为了一个 return offer 熬了两个通宵。你替他高兴，也知道自己没资格说什么。",
+					"室友为了一个 return offer 熬了两个通宵。他拿到了，在楼道里给家里打电话，声音有点抖。",
+					"你替他高兴。你没有告诉他你有四个。",
 				],
 				"continue": "把文件夹拖进归档", "advance_foley": "page",
 			},
@@ -859,8 +863,8 @@ const PROLOGUES: Dictionary = {
 					"前三句分别是失眠、被裁、忘了吃饭。",
 					"模型回答：『很高兴听到你没事。』",
 					"你盯着这句话看了很久。",
-					"你想起饭桌上那句『先玩两年也可以』——",
-					"那也是一个听懂了字、没听懂人的回答。",
+					"你想起饭桌上那句『先玩两年也可以』。",
+					"两句话的语气是一样的。",
 				],
 				"continue": "把这段存下来", "advance_foley": "terminal",
 			},
@@ -970,8 +974,8 @@ const FIXED_EVENTS: Dictionary = {
 			{
 				"id": "mission_question", "title": "第 47 题", "speaker": "林越",
 				"body": [
-					"屏幕上，测试用户说：‘我没事。’ 前三句分别是失眠、被裁和忘了吃饭。",
-					"别的模型回答：‘很高兴听到你没事。’ 你们的模型停了七秒，问：‘要不要先不解释？’",
+					"屏幕上，测试用户说：『我没事。』前三句分别是失眠、被裁和忘了吃饭。",
+					"别的模型回答：『很高兴听到你没事。』你们的模型停了七秒，问：『要不要先不解释？』",
 					"林越盯着那七秒：『你还记得我们为什么要做它吗？』",
 				],
 				"memory_key": "garage_mission_choice",
@@ -1007,7 +1011,7 @@ const FIXED_EVENTS: Dictionary = {
 			{
 				"id": "handoff", "title": "第一周", "speaker": "林越",
 				"body": [
-					"灯亮了。风扇重新爬升。刚才中断的终端日志补上一行自检：‘我没有宕机。我只是暂时失去了表达能力。’",
+					"灯亮了。风扇重新爬升。刚才中断的终端日志补上一行自检：『我没有宕机。我只是暂时失去了表达能力。』",
 					"林越摘下一边耳机：『它已经学会给自己写事故复盘了。创业第一位员工。』",
 					"她在白板上写下四件事，又把第五件——“什么都不做”——补在最下面。",
 					"『一周只有三点注意力。你挑三件，我跑训练。没挑的事也会继续发生——这是公司，不是待办软件。』",
