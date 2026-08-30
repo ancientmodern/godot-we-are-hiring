@@ -1,5 +1,7 @@
 extends SceneTree
 
+const HiringContentScript = preload("res://src/hiring_content.gd")
+
 const OUTPUT_DIR := "res://artifacts/screenshots"
 const NON_MANIFEST_ARCHIVE_DIR := "res://artifacts/screenshots/archive/non_manifest"
 var CAPTURE_SAVE_PATH := "user://we_are_hiring_visual_capture_save_%d.json" % OS.get_process_id()
@@ -69,10 +71,16 @@ const CAPTURE_STEMS: Array[String] = [
 	"office_debt_high",
 	"office_debt_mid",
 	"onboarding",
+	"onboarding_company",
+	"onboarding_origin_serial",
 	"opening_event",
 	"origin_article_second_read",
 	"origin_article_third_read_editor",
 	"origin_article_unchanged",
+	"prologue_bigco_align",
+	"prologue_bigco_exit",
+	"prologue_funded_money",
+	"prologue_serial_postmortem",
 	"signature_complete",
 	"settings_overlay",
 	"settings_reduced_motion",
@@ -88,7 +96,7 @@ const CAPTURE_STEMS: Array[String] = [
 	"terminal",
 	"week_01_dashboard",
 ]
-const EXPECTED_CAPTURE_COUNT := 81
+const EXPECTED_CAPTURE_COUNT := 87
 const ENDING_CAPTURE_COMPANY := "第七码头研究所"
 const CAMPAIGN_ENDING_IDS: Array[String] = [
 	"acquihire", "drift", "independent", "lights_out", "rm_rf", "successor",
@@ -103,6 +111,31 @@ var save_backups: Dictionary = {}
 func _init() -> void:
 	call_deferred("_capture_sequence")
 
+
+func _advance_prologue_to(game, phase_id: String) -> void:
+	for _step in 12:
+		if str(Dictionary(game.call("_first_day_phase")).get("id", "")) == phase_id:
+			return
+		game.event_page_elapsed = 999.0
+		var choices: Array = game.call("_first_day_choices")
+		if choices.is_empty():
+			game.call("_advance_first_day_prologue", false)
+		else:
+			game.call("_choose_first_day_option", 0)
+	game.queue_redraw()
+
+
+func _capture_origin_prologue(game, origin_id: String, phase_id: String, stem: String) -> void:
+	# Each prologue is captured from the same entry point the player uses, so a
+	# broken origin can never quietly fall back to another origin's scene.
+	game.selected_origin = int(HiringContentScript.ORIGIN_ORDER.find(origin_id))
+	game.model.origin_id = origin_id
+	game.call("_open_origin_prologue", HiringContentScript.origin_prologue(origin_id))
+	await _settle_frames(10)
+	_advance_prologue_to(game, phase_id)
+	game.event_page_elapsed = 999.0
+	await _settle_frames(8)
+	_capture(stem)
 
 func _capture_sequence() -> void:
 	_backup_user_files()
@@ -121,7 +154,31 @@ func _capture_sequence() -> void:
 	await _settle_frames(48)
 	_capture("onboarding")
 
+	# Origins: the index sheet with a different file under the finger, then the
+	# company sheet the chosen file leads to.
+	game.call("_set_selected_origin", 1)
+	await _settle_frames(10)
+	_capture("onboarding_origin_serial")
+	game.call("_set_selected_origin", 0)
+	game.call("_confirm_origin_step")
+	await _settle_frames(14)
+	_capture("onboarding_company")
+
+	# One prologue beat per origin: an opening question, a hinge, and a choice
+	# that only exists because of where that founder came from.
 	game.call("_start_new_company")
+	await _settle_frames(12)
+	game.event_page_elapsed = 999.0
+	await _settle_frames(6)
+	_capture("prologue_bigco_align")
+	_advance_prologue_to(game, "badge")
+	game.event_page_elapsed = 999.0
+	await _settle_frames(8)
+	_capture("prologue_bigco_exit")
+	await _capture_origin_prologue(game, "serial", "postmortem", "prologue_serial_postmortem")
+	await _capture_origin_prologue(game, "funded", "money", "prologue_funded_money")
+
+	game.call("_complete_first_day_prologue", true)
 	await _settle_frames(28)
 	_capture("opening_event")
 

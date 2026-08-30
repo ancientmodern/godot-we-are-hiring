@@ -25,7 +25,7 @@ func _run() -> void:
 	resumed._continue_game()
 	_check(resumed.screen == HiringMain.Screen.DASHBOARD, "the completed prologue resumes at the playable first-week dashboard")
 	var resumed_relationship: Dictionary = resumed.model.memory.get("lin_relationship", {})
-	_check(str(resumed_relationship.get("history", "")) == "university_exchange_314", "the university-exchange relationship seed survives save and resume")
+	_check(str(resumed_relationship.get("history", "")) == "bigco_shared_past", "the origin-specific shared past survives save and resume")
 	_check(int(resumed_relationship.get("chemistry", 0)) >= 3 and int(resumed_relationship.get("shared_values", 0)) >= 3, "the player's flirt and mission responses survive save and resume independently")
 	_dispose_ui(resumed)
 	await process_frame
@@ -48,6 +48,11 @@ func _run() -> void:
 func _test_authored_relationship_opening(ui) -> void:
 	ui.name_edit.text = "提灯实验室"
 	ui._start_new_company()
+	# The origin prologue runs first and is a separate scene with its own skip.
+	# This case is about the garage, so it is stepped past deliberately here and
+	# covered on its own terms in _test_confirmed_skip_is_neutral.
+	_check(ui._is_origin_prologue(), "a first run enters the chosen origin's prologue before the garage")
+	ui._complete_first_day_prologue(true)
 	_check(ui.screen == HiringMain.Screen.EVENT and ui._is_first_day_prologue(), "a first run enters the dedicated first-day conversation")
 	_check(ui._first_day_phases().size() == 7, "the first day has seven resumable dramatic beats")
 	_check(str(ui._first_day_phase().get("id", "")) == "arrival", "the player first meets Lin outside the broken glass door")
@@ -62,7 +67,11 @@ func _test_authored_relationship_opening(ui) -> void:
 	ui._choose_first_day_option(2)
 	_check(str(ui.model.memory.get("garage_name_choice", "")) == "warm", "the familiar flirt response is recorded as the player's choice")
 	var name_reply := "\n".join(ui._first_day_phase_body())
-	_check(name_reply.contains("人也还行") and name_reply.contains("314 教室") and name_reply.contains("路口"), "Lin's reply combines restrained flirt with their specific shared history")
+	# The garage is shared; the paragraph about how the two of you know each other
+	# is filled in from the origin. This fixture runs the default (大厂第六年).
+	_check(name_reply.contains("人也还行") and name_reply.contains("同一个组") and name_reply.contains("先这样"), "Lin's reply combines restrained flirt with the origin's specific shared history")
+	_check(not name_reply.contains("{{lin_history}}"), "the shared-past placeholder is always expanded before it is drawn")
+	_check(name_reply.contains("围巾的柴犬") and name_reply.contains("半箱没人认领的狗饼干"), "the garage keeps the concrete objects the whole game later calls back to")
 	var relationship: Dictionary = ui.model.memory.get("lin_relationship", {})
 	_check(int(relationship.get("warmth", 0)) == 3 and int(relationship.get("chemistry", 0)) == 3, "the flirt response changes warmth and chemistry without a visible affection meter")
 	_check(not ui.model.public_state().has("lin_relationship"), "relationship dimensions remain outside the public management HUD")
@@ -103,6 +112,18 @@ func _test_authored_relationship_opening(ui) -> void:
 
 func _test_confirmed_skip_is_neutral(ui) -> void:
 	ui._start_new_company()
+	# Each authored scene is skipped on its own terms. Skipping the origin
+	# prologue must not also skip the garage: they are two scenes, and the door
+	# between them is the one thing all three origins share.
+	_check(ui._is_origin_prologue(), "a new campaign opens on the origin prologue")
+	ui._request_first_day_skip()
+	_check(ui.screen == HiringMain.Screen.EVENT and ui.opening_skip_confirm_pending, "the first prologue skip gesture only arms a visible confirmation")
+	_check(not bool(ui.model.flags.get("origin_prologue_skipped", false)), "an accidental first prologue skip gesture changes no story state")
+	ui._request_first_day_skip()
+	_check(bool(ui.model.flags.get("origin_prologue_skipped", false)), "the repeated prologue skip gesture is recorded")
+	_check(ui.screen == HiringMain.Screen.EVENT and str(ui.current_event.get("id", "")) == "garage_opening", "skipping the prologue still arrives at the garage door")
+	_check(not bool(ui.model.flags.get("first_day_prologue_skipped", false)), "skipping the prologue does not skip the garage as well")
+
 	ui._request_first_day_skip()
 	_check(ui.screen == HiringMain.Screen.EVENT and ui.opening_skip_confirm_pending, "the first skip gesture only arms a visible confirmation")
 	_check(not bool(ui.model.flags.get("first_day_prologue_skipped", false)), "an accidental first skip gesture changes no story state")

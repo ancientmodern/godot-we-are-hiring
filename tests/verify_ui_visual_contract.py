@@ -155,10 +155,16 @@ EXPECTED_CAPTURE_STEMS = frozenset(
         "office_debt_high",
         "office_debt_mid",
         "onboarding",
+        "onboarding_company",
+        "onboarding_origin_serial",
         "opening_event",
         "origin_article_second_read",
         "origin_article_third_read_editor",
         "origin_article_unchanged",
+        "prologue_bigco_align",
+        "prologue_bigco_exit",
+        "prologue_funded_money",
+        "prologue_serial_postmortem",
         "signature_complete",
         "settings_overlay",
         "settings_reduced_motion",
@@ -175,7 +181,7 @@ EXPECTED_CAPTURE_STEMS = frozenset(
         "week_01_dashboard",
     }
 )
-EXPECTED_CAPTURE_COUNT = 81
+EXPECTED_CAPTURE_COUNT = 87
 
 
 def _assert_capture_root_manifest(shots: Path) -> int:

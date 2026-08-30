@@ -184,6 +184,14 @@ var art_night_pothos: Texture2D
 var art_night_pothos_healthy: Texture2D
 var art_night_pothos_severe: Texture2D
 var art_night_room_d: Texture2D
+# The dossier opens on two sheets, in order: which file is yours, then the one
+# you are about to start. Keeping both inside ONBOARDING means the origin step
+# inherits the whole screen's focus, save and gamepad wiring unchanged.
+var onboarding_step := 0
+var selected_origin := 0
+# The garage waits here while the origin prologue plays. All three prologues end
+# at the same door; nothing is skipped over by a montage in between.
+var pending_opening_event: Dictionary = {}
 var name_edit: LineEdit
 var command_edit: LineEdit
 var mouse_position := Vector2(-100, -100)
@@ -470,8 +478,16 @@ func _process(delta: float) -> void:
 		var hover_target := 1.0 if screen == Screen.DASHBOARD and _action_card_rect(i).has_point(mouse_position) else 0.0
 		action_hover_amounts[i] = hover_target if reduced_motion else move_toward(action_hover_amounts[i], hover_target, delta * 8.0)
 	if name_edit != null:
+		# The field belongs to the second onboarding sheet and to nothing else.
+		# Ownership lives here so no entry path can leave it stranded on top of
+		# the origin index.
+		var field_visible := screen == Screen.ONBOARDING and onboarding_step == 1 and not settings_open
+		if name_edit.visible != field_visible:
+			name_edit.visible = field_visible
+			if not field_visible:
+				name_edit.release_focus()
 		var input_reveal := _reveal(0.22, 0.52) if screen == Screen.ONBOARDING else 1.0
-		name_edit.position = Vector2(326, 354 + (1.0 - input_reveal) * 12.0)
+		name_edit.position = Vector2(326, 366 + (1.0 - input_reveal) * 12.0)
 		name_edit.modulate = Color(1.0, 1.0, 1.0, input_reveal)
 	queue_redraw()
 
@@ -574,9 +590,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		match screen:
 			Screen.ONBOARDING:
-				if event.keycode == KEY_ESCAPE and new_game_confirm_pending:
+				if onboarding_step == 0:
+					_handle_origin_select_key(event)
+				elif event.keycode == KEY_ESCAPE and new_game_confirm_pending:
 					new_game_confirm_pending = false
 					_show_toast("已取消新游戏。原存档仍在。")
+				elif event.keycode == KEY_ESCAPE:
+					_return_to_origin_step()
 				elif event.keycode in [KEY_ENTER, KEY_KP_ENTER] and not name_edit.has_focus():
 					if _save_exists_or_recoverable() and not new_game_confirm_pending:
 						_continue_game()
@@ -632,7 +652,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		match screen:
 			Screen.ONBOARDING:
-				if _onboarding_start_rect().has_point(event.position):
+				if onboarding_step == 0:
+					_handle_origin_select_click(event.position)
+				elif _onboarding_start_rect().has_point(event.position):
 					if _save_exists_or_recoverable() and not new_game_confirm_pending:
 						_request_new_game_confirmation()
 					else:
@@ -640,6 +662,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				elif _continue_rect().has_point(event.position) and _save_exists_or_recoverable():
 					new_game_confirm_pending = false
 					_continue_game()
+				elif _origin_back_rect().has_point(event.position):
+					_return_to_origin_step()
 			Screen.DASHBOARD:
 				_handle_dashboard_click(event.position)
 			Screen.ACTION_RESULT:
@@ -710,7 +734,10 @@ func _handle_gamepad_action(action_name: String) -> bool:
 
 	match screen:
 		Screen.ONBOARDING:
-			_handle_onboarding_gamepad_action(action_name)
+			if onboarding_step == 0:
+				_handle_origin_select_gamepad_action(action_name)
+			else:
+				_handle_onboarding_gamepad_action(action_name)
 		Screen.DASHBOARD:
 			_handle_dashboard_gamepad_action(action_name)
 		Screen.ACTION_RESULT:
@@ -757,6 +784,8 @@ func _handle_gamepad_cancel() -> void:
 		if new_game_confirm_pending:
 			new_game_confirm_pending = false
 			_show_toast("已取消新游戏。原存档仍在。")
+		elif onboarding_step == 1:
+			_return_to_origin_step()
 		return
 	if screen == Screen.DASHBOARD:
 		if end_week_confirm_pending:
@@ -928,9 +957,12 @@ func _sync_focus_for_current_screen() -> void:
 		return
 	match screen:
 		Screen.ONBOARDING:
-			var has_save := _save_exists_or_recoverable()
-			var default_onboarding_focus := 1 if has_save and focus_router.section != "onboarding" else focused_onboarding_action
-			focused_onboarding_action = _ensure_focus_section("onboarding", 2 if has_save else 1, 1, default_onboarding_focus)
+			if onboarding_step == 0:
+				selected_origin = _ensure_focus_section("origin_choices", _origin_ids().size(), 1, selected_origin)
+			else:
+				var has_save := _save_exists_or_recoverable()
+				var default_onboarding_focus := 1 if has_save and focus_router.section != "onboarding" else focused_onboarding_action
+				focused_onboarding_action = _ensure_focus_section("onboarding", 2 if has_save else 1, 1, default_onboarding_focus)
 		Screen.DASHBOARD:
 			selected_action = _ensure_focus_section("dashboard_actions", week_action_ids.size(), 1, selected_action)
 		Screen.EVENT:
@@ -994,6 +1026,55 @@ func _handle_dashboard_key(event: InputEventKey) -> void:
 		_navigate_to_screen(Screen.ANNOUNCEMENTS)
 	elif event.keycode == KEY_QUOTELEFT:
 		_navigate_to_screen(Screen.TERMINAL)
+
+
+func _handle_origin_select_click(position: Vector2) -> void:
+	for i in _origin_ids().size():
+		if _origin_row_rect(i).has_point(position):
+			if i == selected_origin:
+				_confirm_origin_step()
+			else:
+				_set_selected_origin(i)
+			return
+	if _origin_confirm_rect().has_point(position):
+		_confirm_origin_step()
+	elif _save_exists_or_recoverable() and _origin_back_rect().has_point(position):
+		_continue_game()
+
+
+func _handle_origin_select_key(event: InputEventKey) -> void:
+	match event.keycode:
+		KEY_UP, KEY_W:
+			_set_selected_origin(selected_origin - 1)
+		KEY_DOWN, KEY_S:
+			_set_selected_origin(selected_origin + 1)
+		KEY_1, KEY_KP_1:
+			_set_selected_origin(0)
+		KEY_2, KEY_KP_2:
+			_set_selected_origin(1)
+		KEY_3, KEY_KP_3:
+			_set_selected_origin(2)
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E:
+			_confirm_origin_step()
+		KEY_TAB:
+			if _save_exists_or_recoverable():
+				_continue_game()
+
+
+func _handle_origin_select_gamepad_action(action_name: String) -> bool:
+	match action_name:
+		"move_up", "move_left":
+			_set_selected_origin(selected_origin - 1)
+		"move_down", "move_right":
+			_set_selected_origin(selected_origin + 1)
+		"interact":
+			_confirm_origin_step()
+		"end_week":
+			if _save_exists_or_recoverable():
+				_continue_game()
+		_:
+			return false
+	return true
 
 
 func _on_company_name_submitted(_submitted_text: String) -> void:
@@ -1557,6 +1638,7 @@ func _start_new_company() -> void:
 		_show_toast("公司工作区初始化失败。")
 		return
 	model = director.model
+	model.origin_id = _selected_origin_id()
 	if not last_ending_id.is_empty():
 		model.memory["previous_ending"] = last_ending_id
 	terminal_lines.clear()
@@ -1570,11 +1652,37 @@ func _start_new_company() -> void:
 	command_edit.visible = false
 	var opening_value = started.get("event", {})
 	var opening: Dictionary = opening_value if opening_value is Dictionary else {}
-	if not opening.is_empty():
+	# The prologue only precedes a first garage. A second run has its own authored
+	# opening — the cup that is already on the desk — and that scene is the point
+	# of coming back; it must not be pushed behind a past the player already has.
+	var prologue := HiringContent.origin_prologue(model.origin_id) if str(opening.get("id", "")) == "garage_opening" else {}
+	if not prologue.is_empty() and not Array(prologue.get("phases", [])).is_empty():
+		pending_opening_event = opening
+		_open_origin_prologue(prologue)
+	elif not opening.is_empty():
 		_open_event(opening)
 	else:
 		_change_screen(Screen.DASHBOARD)
 	_save_game()
+
+
+func _open_origin_prologue(prologue: Dictionary) -> void:
+	# The prologue is presentation, not a director beat: it resolves nothing and
+	# owes the campaign nothing. It borrows the garage opening's phase grammar so
+	# there is exactly one authored-scene renderer in the game.
+	current_event = {
+		"id": str(prologue.get("id", "")),
+		"title": str(prologue.get("title", "")),
+		"kicker": str(prologue.get("kicker", "")),
+		"body": [],
+		"choices": [],
+		"opening_phases": Array(prologue.get("phases", [])).duplicate(true),
+		"_ui_origin_prologue": true,
+	}
+	current_event_page = 0
+	event_page_elapsed = 0.0
+	event_result_lines.clear()
+	_change_screen(Screen.EVENT)
 
 
 func _continue_game() -> void:
@@ -1597,6 +1705,8 @@ func _continue_game() -> void:
 	terminal_lines = _to_string_array(parsed.get("ui_terminal", []))
 	pending_week_advance = bool(parsed.get("ui_pending_week_advance", false))
 	pending_night_id = str(parsed.get("ui_pending_night_id", ""))
+	var pending_opening_value = parsed.get("ui_pending_opening_event", {})
+	pending_opening_event = pending_opening_value.duplicate(true) if pending_opening_value is Dictionary else {}
 	result_title = str(parsed.get("ui_result_title", ""))
 	result_lines = _to_string_array(parsed.get("ui_result_lines", []))
 	result_return = str(parsed.get("ui_result_return", "dashboard"))
@@ -2253,11 +2363,19 @@ func _open_event(event: Dictionary) -> void:
 	_change_screen(Screen.EVENT)
 
 
+func _is_origin_prologue() -> bool:
+	return bool(current_event.get("_ui_origin_prologue", false)) and not Array(current_event.get("opening_phases", [])).is_empty()
+
+
 func _is_first_day_prologue() -> bool:
+	if _is_origin_prologue():
+		return true
 	return str(current_event.get("id", "")) == "garage_opening" and not Array(current_event.get("opening_phases", [])).is_empty()
 
 
 func _current_first_day_event(event: Dictionary) -> Dictionary:
+	if bool(event.get("_ui_origin_prologue", false)):
+		return event.duplicate(true)
 	if str(event.get("id", "")) != "garage_opening":
 		return event.duplicate(true)
 	var authored := HiringContent.get_fixed_event(0, 1)
@@ -2299,9 +2417,19 @@ func _first_day_phase_body() -> Array[String]:
 		if body_variants_value is Dictionary:
 			paragraphs.append_array(_to_string_array(Dictionary(body_variants_value).get(selected_variant, [])))
 	paragraphs.append_array(_to_string_array(phase.get("body", [])))
-	for index in paragraphs.size():
-		paragraphs[index] = paragraphs[index].replace("{{company}}", str(model.company_name) if model != null else "这家公司")
-	return paragraphs
+	# The garage is the one scene all three origins share, so the paragraph about
+	# how the two of you know each other is filled in from where you came from.
+	# Reframing the shared scene beats bolting an exclusive one onto each origin.
+	var expanded: Array[String] = []
+	for paragraph in paragraphs:
+		if paragraph == "{{lin_history}}":
+			var history := _to_string_array(HiringContent.get_origin(model.origin_id if model != null else HiringContent.DEFAULT_ORIGIN).get("history_lines", []))
+			expanded.append_array(history)
+		else:
+			expanded.append(paragraph)
+	for index in expanded.size():
+		expanded[index] = expanded[index].replace("{{company}}", str(model.company_name) if model != null else "这家公司")
+	return expanded
 
 
 func _first_day_reveal_seconds() -> float:
@@ -2394,6 +2522,26 @@ func _advance_first_day_prologue(play_phase_foley: bool = true) -> void:
 func _complete_first_day_prologue(skipped: bool) -> void:
 	if not _is_first_day_prologue() or model == null:
 		return
+	if _is_origin_prologue():
+		model.memory["origin_prologue_completed"] = true
+		model.flags["origin_prologue_seen"] = true
+		if skipped:
+			model.flags["origin_prologue_skipped"] = true
+		else:
+			_play_foley("confirm")
+		var garage := pending_opening_event.duplicate(true)
+		pending_opening_event = {}
+		current_event.clear()
+		event_page_elapsed = 0.0
+		# The next scene arms its own skip. Carrying the confirmation across the
+		# handoff would let one gesture discard two authored openings.
+		opening_skip_confirm_pending = false
+		if garage.is_empty():
+			_change_screen(Screen.DASHBOARD)
+		else:
+			_open_event(garage)
+		_save_game()
+		return
 	if not model.memory.has("garage_name_choice"):
 		model.memory["garage_name_choice"] = "skipped" if skipped else "pragmatic"
 	if not model.memory.has("garage_mission_choice"):
@@ -2417,7 +2565,7 @@ func _request_first_day_skip() -> void:
 		return
 	opening_skip_confirm_pending = true
 	_play_foley("blocked")
-	_show_toast("再按一次 K / Esc / B，或再次点击，才会跳过这段共同过去。")
+	_show_toast("再按一次 K / Esc / B，或再次点击，才会跳过这一段。" if _is_origin_prologue() else "再按一次 K / Esc / B，或再次点击，才会跳过这段共同过去。")
 	queue_redraw()
 
 
@@ -2427,7 +2575,7 @@ func _lin_relationship_seed() -> Dictionary:
 	var relationship_value = model.memory.get("lin_relationship", {})
 	var relationship := Dictionary(relationship_value).duplicate(true) if relationship_value is Dictionary else {}
 	var defaults := {
-		"history": "university_exchange_314",
+		"history": str(HiringContent.get_origin(model.origin_id).get("id", "bigco")) + "_shared_past",
 		"status": "cofounders_unspoken_attraction",
 		"trust": 1,
 		"rapport": 1,
@@ -2540,6 +2688,11 @@ func _resolve_conditional_choice(choice: Dictionary) -> Dictionary:
 
 
 func _close_event() -> void:
+	if _is_origin_prologue():
+		# Closing a prologue is completing it. It owns no director key, so the
+		# ordinary resolution path would refuse and strand the scene open.
+		_complete_first_day_prologue(true)
+		return
 	var event_id := str(current_event.get("id", ""))
 	var resume_finish_week := bool(current_event.get("_ui_resume_finish_week", false))
 	if not event_id.is_empty():
@@ -2685,9 +2838,9 @@ func _return_to_onboarding() -> void:
 	current_ending.clear()
 	current_ending_id = ""
 	ending_page = 0
-	name_edit.visible = true
 	name_edit.text = "提灯实验室"
 	command_edit.visible = false
+	onboarding_step = 0
 	_change_screen(Screen.ONBOARDING)
 
 
@@ -2729,7 +2882,7 @@ func _change_screen(next: Screen, record_entry: bool = true) -> bool:
 	screen = next
 	_normalize_pagination_state()
 	screen_time = 0.0
-	name_edit.visible = screen == Screen.ONBOARDING
+	name_edit.visible = screen == Screen.ONBOARDING and onboarding_step == 1
 	command_edit.visible = (
 		screen == Screen.NIGHT_SHIFT
 		and night_interaction != null
@@ -2997,6 +3150,9 @@ func _draw() -> void:
 func _draw_onboarding() -> void:
 	_draw_art_background(art_dossier_desk, Color(0.96, 0.98, 1.0, 1.0))
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.015, 0.045, 0.06, 0.08))
+	if onboarding_step == 0:
+		_draw_origin_select()
+		return
 	var reveal := _reveal(0.02, 0.62)
 	draw_set_transform(Vector2(0, (1.0 - reveal) * 18.0))
 	# The sheet you sign and the sheet clipped beside it now have different jobs.
@@ -3037,6 +3193,61 @@ func _draw_onboarding() -> void:
 	draw_line(Vector2(838, 496), Vector2(1074, 496), Color(RULE_STRONG, 0.55), 1.0)
 	_draw_text("F11  全屏", Vector2(838, 520), TYPE_META, Color(MUTED, 0.8))
 	_draw_text("F1  设置", Vector2(838, 542), TYPE_META, Color(MUTED, 0.8))
+	draw_set_transform(Vector2.ZERO)
+
+
+func _draw_origin_select() -> void:
+	# Three filed entries on the sheet you are reading, and the one you have your
+	# finger on opened on the leaf clipped beside it. Same two-leaf grammar as the
+	# intranet, so choosing a past is the same gesture as opening any other file.
+	var reveal := _reveal(0.02, 0.55)
+	draw_set_transform(Vector2(0, (1.0 - reveal) * 14.0))
+	_draw_text("人事档案", Vector2(326, 118), TYPE_META, GREEN)
+	_draw_display_text("你从哪儿来", Vector2(322, 176), TYPE_HERO, INK)
+	_draw_text("这一页决定开局前发生过什么，也决定后面有些话你说得出口。", Vector2(326, 208), TYPE_LABEL, MUTED)
+	draw_line(Vector2(326, 228), Vector2(746, 228), RULE_STRONG, 1.0)
+	var ids := _origin_ids()
+	for i in ids.size():
+		var origin: Dictionary = HiringContent.get_origin(ids[i])
+		var row := _origin_row_rect(i)
+		var active := i == selected_origin
+		var hovered := row.has_point(mouse_position)
+		var visual := Rect2(row.position + Vector2(6 if active else 0, 0), row.size - Vector2(6 if active else 0, 0))
+		if active or hovered:
+			draw_rect(visual, Color(0.24, 0.52, 0.47, 0.16 if active else 0.08))
+		if active:
+			draw_rect(Rect2(visual.position, Vector2(3, visual.size.y)), GREEN)
+		if _focus_is("origin_choices", i):
+			_draw_panel(visual.grow(3.0), Color.TRANSPARENT, GREEN_BRIGHT, RADIUS_CONTROL + 2.0, 2.0)
+		_draw_display_text("%02d" % (i + 1), visual.position + Vector2(14, 34), TYPE_LABEL, GREEN if active else COLD_40)
+		_draw_display_text(str(origin.get("name", "")), visual.position + Vector2(50, 36), TYPE_SECTION, INK)
+		_draw_text(str(origin.get("headline", "")), visual.position + Vector2(50, 64), TYPE_LABEL, MUTED, HORIZONTAL_ALIGNMENT_LEFT, visual.size.x - 62)
+		draw_line(Vector2(visual.position.x, visual.end.y), Vector2(visual.end.x, visual.end.y), RULE_SOFT, 1.0)
+	var chosen: Dictionary = HiringContent.get_origin(_selected_origin_id())
+	_draw_text("说明", Vector2(838, 200), TYPE_META, MUTED)
+	draw_line(Vector2(838, 212), Vector2(1074, 212), Color(RULE_STRONG, 0.8), 1.0)
+	var note_y := 240.0
+	for line_value in Array(chosen.get("detail", [])):
+		var wrapped := _wrap_text_px(str(line_value), 236.0, TYPE_META)
+		for wrapped_line in wrapped:
+			_draw_text(wrapped_line, Vector2(838, note_y), TYPE_META, MUTED)
+			note_y += 20.0
+		note_y += 8.0
+	note_y += 12.0
+	_draw_text(str(chosen.get("rule_title", "")), Vector2(838, note_y), TYPE_LABEL, PAPER_GREEN)
+	note_y += 24.0
+	for rule_line in _wrap_text_px(str(chosen.get("rule", "")), 236.0, TYPE_META):
+		_draw_text(rule_line, Vector2(838, note_y), TYPE_META, MUTED)
+		note_y += 20.0
+	note_y += 20.0
+	for lin_line in _wrap_text_px(str(chosen.get("lin", "")), 236.0, TYPE_META):
+		_draw_text(lin_line, Vector2(838, note_y), TYPE_META, PAPER_AMBER)
+		note_y += 20.0
+	draw_set_transform(Vector2.ZERO)
+	_draw_ledger_button(_origin_confirm_rect(), "就是这一份", _gamepad_shortcut("A", "ENTER"), "primary", true, _focus_is("origin_choices", selected_origin))
+	if _save_exists_or_recoverable():
+		_draw_ledger_button(_origin_back_rect(), "继续上次", _gamepad_shortcut("Y", "TAB"), "quiet")
+	_draw_text("F11  全屏   ·   F1  设置", Vector2(838, 636), TYPE_META, Color(MUTED, 0.75))
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -4738,18 +4949,41 @@ func _draw_event() -> void:
 	_draw_event_sidebar(panel)
 
 
+func _first_day_scene_texture(phase: Dictionary) -> Texture2D:
+	match str(phase.get("scene", "")):
+		"boardroom": return art_boardroom
+		"office_day": return art_office_day
+		"office_night": return art_office_night
+		"cafe": return art_cafe
+		_: return art_title
+
+
+func _first_day_shows_lin(phase: Dictionary) -> bool:
+	# Lin is in the garage from the first frame. In a prologue she arrives with
+	# the message, and not one beat earlier — the whole scene is about the room
+	# she is not in yet.
+	return not _is_origin_prologue() or bool(phase.get("lin", false))
+
+
 func _draw_first_day_prologue() -> void:
-	_draw_art_background(art_title, Color(0.72, 0.79, 0.84, 1.0))
+	var scene_phase := _first_day_phase()
+	_draw_art_background(_first_day_scene_texture(scene_phase), Color(0.72, 0.79, 0.84, 1.0))
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.01, 0.035, 0.055, 0.34))
-	_draw_first_day_rain()
+	if str(scene_phase.get("scene", "")) in ["", "title", "office_night"]:
+		_draw_first_day_rain()
 	# The cold open is staged as a conversation in the room, not another archive
 	# modal. Opaque reading planes keep every line independent from the painting.
 	var top_bar := Rect2(0, 0, VIEW.x, 112)
 	draw_rect(top_bar, Color(0.018, 0.055, 0.072, 0.88))
 	draw_line(Vector2(0, top_bar.end.y), Vector2(VIEW.x, top_bar.end.y), Color(0.38, 0.62, 0.62, 0.44), 1.0)
-	_draw_text("DAY ONE  /  21:47  /  RAIN", Vector2(54, 36), 12, TERMINAL_TEXT)
-	_draw_display_text("第一天", Vector2(52, 82), 34, COLD_05)
-	_draw_text("两个人 · 一张显卡 · 十周现金", Vector2(178, 80), 13, COLD_20)
+	var header_kicker := "DAY ONE  /  21:47  /  RAIN"
+	if _is_origin_prologue():
+		header_kicker = str(scene_phase.get("place", current_event.get("kicker", "")))
+	var header_title := str(current_event.get("title", "序章")) if _is_origin_prologue() else "第一天"
+	var header_note: String = str(HiringContent.get_origin(model.origin_id).get("name", "")) if _is_origin_prologue() else "两个人 · 一张显卡 · 十周现金"
+	_draw_text(header_kicker, Vector2(54, 38), TYPE_META, TERMINAL_TEXT)
+	_draw_display_text(header_title, Vector2(52, 84), TYPE_DISPLAY, COLD_05)
+	_draw_text(header_note, Vector2(52 + font_display.get_string_size(header_title, HORIZONTAL_ALIGNMENT_LEFT, -1, TYPE_DISPLAY).x + 22, 82), TYPE_LABEL, COLD_20)
 	var skip_rect := _first_day_skip_rect()
 	_draw_ledger_button(skip_rect, "再次确认跳过" if opening_skip_confirm_pending else "跳过序章", _gamepad_shortcut("B", "K"), "danger" if opening_skip_confirm_pending else "quiet", true)
 
@@ -4761,14 +4995,14 @@ func _draw_first_day_prologue() -> void:
 	_draw_panel(Rect2(panel.position + Vector2(7, 9), panel.size), Color(0.0, 0.02, 0.03, 0.34), Color.TRANSPARENT, 4.0, 0.0)
 	_draw_panel(panel, Color(0.925, 0.925, 0.875, 0.985), COLD_40, 4.0, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(6, panel.size.y)), GREEN)
-	_draw_text(str(phase.get("speaker", "林越")), panel.position + Vector2(34, 38), 12, PAPER_GREEN)
-	_draw_text("现场 / 不留档的部分", panel.position + Vector2(454, 38), 12, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 238)
-	_draw_display_text(str(phase.get("title", "第一天")), panel.position + Vector2(32, 84), 28, INK)
-	draw_line(panel.position + Vector2(32, 102), panel.position + Vector2(panel.size.x - 32, 102), COLD_40, 1.0)
+	_draw_text(str(phase.get("speaker", "林越")), panel.position + Vector2(34, 40), TYPE_META, PAPER_GREEN)
+	_draw_text("现场 · 不留档的部分", panel.position + Vector2(454, 40), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 238)
+	_draw_display_text(str(phase.get("title", "第一天")), panel.position + Vector2(32, 88), TYPE_DISPLAY, INK)
+	draw_line(panel.position + Vector2(32, 106), panel.position + Vector2(panel.size.x - 32, 106), RULE_STRONG, 1.0)
 	var choices := _first_day_choices()
 	var phase_ready := _first_day_ready()
-	var body_height := 154.0 if not choices.is_empty() else 314.0
-	_draw_first_day_paragraphs(_first_day_phase_body(), Rect2(panel.position + Vector2(34, 122), Vector2(660, body_height)))
+	var body_height := 190.0 if not choices.is_empty() else 356.0
+	_draw_first_day_paragraphs(_first_day_phase_body(), Rect2(panel.position + Vector2(34, 128), Vector2(660, body_height)))
 
 	if not phase_ready:
 		var waiting_width := 46.0 + float(_first_day_phase_body().size()) * 12.0
@@ -4791,14 +5025,36 @@ func _draw_first_day_prologue() -> void:
 			draw_line(Vector2(rect.position.x, rect.end.y), rect.end, COLD_30, 1.0)
 			if focused:
 				_draw_panel(rect.grow(3.0), Color.TRANSPARENT, GREEN_BRIGHT, 4.0, 2.0)
-			_draw_text("%d" % (i + 1), rect.position + Vector2(16, 30), 12, PAPER_GREEN)
-			_draw_text(str(response.get("label", "回应")), rect.position + Vector2(48, 30), 14, INK)
+			_draw_display_text("%d" % (i + 1), rect.position + Vector2(16, 31), TYPE_LABEL, PAPER_GREEN)
+			_draw_text(str(response.get("label", "回应")), rect.position + Vector2(48, 31), TYPE_BODY, INK)
 
-	_draw_text("FIRST DAY  %02d / %02d" % [phase_index + 1, maxi(1, phases.size())], panel.position + Vector2(34, panel.size.y - 20), 11, MUTED)
+	_draw_text("%s  %02d / %02d" % ["序章" if _is_origin_prologue() else "第一天", phase_index + 1, maxi(1, phases.size())], panel.position + Vector2(34, panel.size.y - 20), TYPE_META, MUTED)
 	for tick in phases.size():
-		var tick_rect := Rect2(panel.position + Vector2(182 + tick * 28, panel.size.y - 27), Vector2(18, 3))
+		var tick_rect := Rect2(panel.position + Vector2(158 + tick * 28, panel.size.y - 27), Vector2(18, 3))
 		draw_rect(tick_rect, GREEN if tick <= phase_index else COLD_30)
-	_draw_first_day_portrait(phase_index)
+	if _first_day_shows_lin(phase):
+		_draw_first_day_portrait(phase_index)
+	else:
+		_draw_first_day_evidence(phase)
+
+
+func _draw_first_day_evidence(phase: Dictionary) -> void:
+	# The prologue's right-hand object is whatever the beat is actually about: a
+	# document, a spreadsheet, a badge. It is the same evidence card the night
+	# shift and the endings use, so a scene before the company still belongs to
+	# the same archive.
+	var lines := _to_string_array(phase.get("evidence", []))
+	if lines.is_empty():
+		return
+	var card := Rect2(850, 148, 350, 176)
+	_draw_panel(Rect2(card.position + Vector2(7, 9), card.size), Color(0.0, 0.02, 0.03, 0.34), Color.TRANSPARENT, 3.0, 0.0)
+	_draw_panel(card, Color(0.055, 0.10, 0.115, 0.94), Color(COLD_60, 0.9), 3.0, 1.0)
+	draw_rect(Rect2(card.position, Vector2(3, card.size.y)), Color(GREEN, 0.85))
+	_draw_text("现场物证", card.position + Vector2(22, 30), TYPE_META, NIGHT_MUTED)
+	draw_line(card.position + Vector2(22, 44), card.position + Vector2(card.size.x - 22, 44), Color(COLD_60, 0.7), 1.0)
+	_draw_display_text(lines[0], card.position + Vector2(22, 84), TYPE_SECTION, NIGHT_TEXT)
+	if lines.size() > 1:
+		_draw_multiline(lines[1], Rect2(card.position + Vector2(22, 98), Vector2(card.size.x - 44, 60)), TYPE_META, NIGHT_MUTED, 20)
 
 
 func _draw_first_day_rain() -> void:
@@ -5744,7 +6000,7 @@ func _close_settings() -> void:
 	settings_open = false
 	_play_foley("page")
 	if name_edit != null:
-		name_edit.visible = screen == Screen.ONBOARDING
+		name_edit.visible = screen == Screen.ONBOARDING and onboarding_step == 1
 	if command_edit != null:
 		command_edit.visible = screen == Screen.NIGHT_SHIFT and night_interaction != null and night_interaction.terminal_accepts_command()
 		if command_edit.visible and night_command_focus_before_settings:
@@ -6673,6 +6929,7 @@ func _save_game() -> Dictionary:
 	payload["ui_result_return"] = result_return
 	payload["ui_result_page"] = result_page
 	payload["ui_current_event"] = current_event
+	payload["ui_pending_opening_event"] = pending_opening_event
 	payload["ui_current_event_page"] = current_event_page
 	payload["ui_event_page_elapsed"] = event_page_elapsed
 	payload["ui_current_ending_id"] = current_ending_id
@@ -6984,6 +7241,54 @@ func _wrap_text_px(text: String, max_width: float, size: int) -> Array[String]:
 		_wrap_cache.clear()
 	_wrap_cache[cache_key] = lines.duplicate()
 	return lines
+
+
+func _origin_ids() -> Array:
+	return HiringContent.ORIGIN_ORDER
+
+
+func _selected_origin_id() -> String:
+	var ids := _origin_ids()
+	return str(ids[clampi(selected_origin, 0, ids.size() - 1)])
+
+
+func _origin_row_rect(index: int) -> Rect2:
+	return Rect2(322, 246 + index * 104, 428, 92)
+
+
+func _origin_confirm_rect() -> Rect2:
+	return Rect2(478, 574, 268, 50)
+
+
+func _origin_back_rect() -> Rect2:
+	return Rect2(326, 574, 132, 50)
+
+
+func _set_selected_origin(index: int) -> void:
+	var ids := _origin_ids()
+	var next := clampi(index, 0, ids.size() - 1)
+	if next == selected_origin:
+		return
+	selected_origin = next
+	_play_foley("page")
+	queue_redraw()
+
+
+func _confirm_origin_step() -> void:
+	onboarding_step = 1
+	new_game_confirm_pending = false
+	_play_foley("confirm")
+	_sync_focus_for_current_screen()
+	queue_redraw()
+
+
+func _return_to_origin_step() -> void:
+	onboarding_step = 0
+	new_game_confirm_pending = false
+	name_edit.release_focus()
+	_play_foley("page")
+	_sync_focus_for_current_screen()
+	queue_redraw()
 
 
 func _onboarding_start_rect() -> Rect2:
