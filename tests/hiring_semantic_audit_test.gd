@@ -157,6 +157,7 @@ const AMBIGUOUS_REVEAL_TERMS := ["解释", "原因", "答案", "为什么", "真
 ## semantic addresses, not source line numbers.
 const AMBIGUOUS_REVEAL_ALLOWLIST := [
 	{"prefix": "EMPLOYEE_TEMPLATES.zhao_ke.hire_quote", "terms": ["为什么"], "reason": "evaluation quality"},
+	{"prefix": "FIXED_EVENTS.0:1.opening_phases", "terms": ["为什么", "解释"], "reason": "Lin Yue asks why they started; the model asks whether to hold an explanation back"},
 	{"prefix": "FIXED_EVENTS.0:2", "terms": ["答案"], "reason": "the model's test answer"},
 	{"prefix": "FIXED_EVENTS.0:3", "terms": ["解释"], "reason": "ordinary concept explanation"},
 	{"prefix": "FIXED_EVENTS.1:4.choices.delegate", "terms": ["答案"], "reason": "fundraising answer"},

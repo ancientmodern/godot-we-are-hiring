@@ -1217,11 +1217,11 @@ const NIGHT_SHIFTS: Dictionary = {
 		"subtitle": "融资到账的那天 · 01:17",
 		"intro": [
 			"所有人都走了。空调还在响。",
-			"界面变成办公室的极简平面图。点击移动，点击读取；没有任务列表。",
+			"感应灯只认得你刚走过的那一段。",
 		],
 		"objects": {
 			"corridor": {
-				"id": "corridor", "label": "走廊尽头", "position": [0.84, 0.44],
+				"id": "corridor", "label": "走廊尽头", "position": [0.205, 0.40],
 				"body": [
 					"灯是感应的。你走到哪儿亮到哪儿，身后一段一段地灭。",
 					"你走了三遍，就为了看它熄灭。",
@@ -1229,7 +1229,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night1_corridor_read"], "command": "",
 			},
 			"whiteboard": {
-				"id": "whiteboard", "label": "白板", "position": [0.28, 0.22],
+				"id": "whiteboard", "label": "白板", "position": [0.372, 0.345],
 				"body": [
 					"上面还留着搬家那天大家写的东西。",
 					"有人画了一只柴犬，戴着围巾。",
@@ -1239,7 +1239,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night1_whiteboard_read"], "command": "",
 			},
 			"fridge": {
-				"id": "fridge", "label": "冰箱", "position": [0.18, 0.73],
+				"id": "fridge", "label": "冰箱", "position": [0.30, 0.755],
 				"body": [
 					"有人贴了一张纸条：『冰箱里的酸奶 8 月 3 日过期，是谁的？』",
 					"今天是 8 月 19 日。",
@@ -1248,7 +1248,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night1_fridge_read"], "command": "",
 			},
 			"pothos": {
-				"id": "pothos", "label": "绿萝", "position": [0.42, 0.38],
+				"id": "pothos", "label": "绿萝", "position": [0.885, 0.76],
 				"body": [
 					"叶子边缘有一点黄。不是快死，只是没人知道上一次是谁浇的水。",
 					"花盆下面压着一张供应商收据。报销状态：待你审批。",
@@ -1256,7 +1256,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night1_pothos_read"], "command": "",
 			},
 			"mug": {
-				"id": "mug", "label": "马克杯", "position": [0.57, 0.62],
+				"id": "mug", "label": "马克杯", "position": [0.478, 0.835],
 				"body": [
 					"杯底还有半口冷咖啡。杯把朝着显示器。",
 					"你记得它原本更靠左一点。也可能没有。",
@@ -1278,7 +1278,7 @@ const NIGHT_SHIFTS: Dictionary = {
 		],
 		"objects": {
 			"pothos": {
-				"id": "pothos", "label": "绿萝", "position": [0.39, 0.35],
+				"id": "pothos", "label": "绿萝", "position": [0.885, 0.76],
 				"body": [
 					"它黄了大概三分之二，但剩下三分之一是真的绿，绿得有点过分，像在证明什么。",
 					"你想起公司有一个『办公室植物照料轮值表』。",
@@ -1288,7 +1288,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night2_pothos_read"], "command": "",
 			},
 			"window_desk": {
-				"id": "window_desk", "label": "工位 · 靠窗第二个", "position": [0.72, 0.26],
+				"id": "window_desk", "label": "工位 · 靠窗第二个", "position": [0.775, 0.505],
 				"body": [
 					"显示器还开着。屏保是公司 logo 在慢慢转。",
 					"桌上有一个马克杯，杯底一层干掉的褐色。杯身印着『第一届全员团建·2024』。",
@@ -1299,7 +1299,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night2_mug_moved_two_cm"], "command": "",
 			},
 			"meeting_room_d": {
-				"id": "meeting_room_d", "label": "会议室 D", "position": [0.88, 0.51],
+				"id": "meeting_room_d", "label": "会议室 D", "position": [0.552, 0.36],
 				"body": [
 					"楼层图上没有这间。日程系统里有。",
 					"门开着，灯亮着，投影仪在待机，蓝色的光。",
@@ -1311,7 +1311,7 @@ const NIGHT_SHIFTS: Dictionary = {
 				"flags": ["night2_room_d_read", "night2_room_d_light_off"], "command": "",
 			},
 			"terminal": {
-				"id": "terminal", "label": "未关机的终端", "position": [0.55, 0.69],
+				"id": "terminal", "label": "未关机的终端", "position": [0.635, 0.755],
 				"body": [
 					"有人忘了退出登录。屏幕上是一段没发出去的对话：",
 					"> 你觉得我们还能撑多久",
