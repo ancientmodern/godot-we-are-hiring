@@ -34,10 +34,20 @@ const DOCUMENT_LINES_PER_PAGE := 10
 const TEAM_ROWS_PER_PAGE := 9
 const ANNOUNCEMENTS_PER_PAGE := 6
 const UI_MIN_TARGET := 44.0
-const TYPE_MICRO := 12
-const TYPE_META := 12
-const TYPE_LABEL := 13
-const TYPE_BODY := 14
+
+# Type ramp. Seven steps, nothing between them. Every _draw_text* helper clamps
+# to TYPE_META, so a call site can never whisper below the readable floor — but
+# a ramp only reads as a ramp if the steps are far enough apart to be seen. The
+# earlier build spent 23 sizes between 9 and 46 and clamped four of them onto
+# the same 12px, which flattened the whole hierarchy into one grey mass.
+const TYPE_META := 12       # 元数据、页码、快捷键、单位、印记
+const TYPE_LABEL := 14      # 字段名、表头、次级标签
+const TYPE_BODY := 16       # 正文、列表项、说明
+const TYPE_ACTION := 17     # 按钮标签与行动名
+const TYPE_SECTION := 22    # 分区标题（衬线）
+const TYPE_DISPLAY := 32    # 页面标题，每屏至多一个（衬线）
+const TYPE_HERO := 46       # 开场与结局第一页（衬线）
+const TYPE_MICRO := TYPE_META
 const RADIUS_CONTROL := 3.0
 const RADIUS_CARD := 2.0
 const RADIUS_MODAL := 8.0
@@ -88,6 +98,36 @@ const NIGHT_TEXT := Color("#dce7e8")
 const NIGHT_MUTED := Color("#8fa2a8")
 const TERMINAL := Color("#071319")
 const TERMINAL_TEXT := Color("#b9dad7")
+
+# Two neutral families, thirteen cold steps and six warm ones. Everything that
+# is not an accent is one of these. The cold family gains saturation as it
+# darkens, which is what makes it read as ink soaking into damp paper instead of
+# as grey. The warm family belongs to people: their paper, their handwriting,
+# their lamp. Nothing in the UI mixes a neutral by hand.
+const COLD_00 := Color("#f7f8f5")
+const COLD_05 := Color("#eef1ec")
+const COLD_10 := Color("#e2e7e3")
+const COLD_20 := Color("#c9d2ce")
+const COLD_30 := Color("#adb8b4")
+const COLD_40 := Color("#8b9a99")
+const COLD_50 := Color("#6d7f80")
+const COLD_60 := Color("#52666f")
+const COLD_70 := Color("#35505a")
+const COLD_80 := Color("#1d3540")
+const COLD_90 := Color("#12262e")
+const COLD_95 := Color("#0b171d")
+const COLD_99 := Color("#071319")
+const WARM_05 := Color("#f4efe4")
+const WARM_10 := Color("#ebe0c9")
+const WARM_20 := Color("#e6d4b6")
+const WARM_40 := Color("#c0a883")
+const WARM_60 := Color("#a96535")
+const WARM_70 := Color("#8f552d")
+# Named roles, so a call site says what it means rather than how dark it is.
+const RULE_STRONG := COLD_30   # 表面上的主分隔线与纸边
+const RULE_SOFT := COLD_20     # 行与行之间
+const PAPER := COLD_05         # 主阅读纸
+const PAPER_SUNK := COLD_10    # 次级纸、工具条、页脚
 const WINDOW_INTERIOR_PERSON_COUNT := 33
 const WINDOW_TOTAL_PERSON_COUNT := 37
 const BOARD_ORG_ACTIVE_COUNT := 31
@@ -156,6 +196,9 @@ var toast_kind := "info"
 
 var week_action_ids: Array[String] = []
 var used_action_ids: Array[String] = []
+# Who actually did each of this week's handled items. The whole game is the
+# distance between these two answers, so the folio keeps it in writing.
+var used_action_authors: Dictionary = {}
 var selected_action := 0
 var current_event: Dictionary = {}
 var current_event_page := 0
@@ -373,7 +416,7 @@ func _create_text_inputs() -> void:
 	name_edit.add_theme_font_size_override("font_size", 20)
 	name_edit.add_theme_color_override("font_color", INK)
 	name_edit.add_theme_color_override("caret_color", GREEN)
-	name_edit.add_theme_stylebox_override("normal", _line_edit_style(Color(0.96, 0.96, 0.92, 0.26), Color("#85948f"), 1))
+	name_edit.add_theme_stylebox_override("normal", _line_edit_style(Color(0.96, 0.96, 0.92, 0.26), COLD_40, 1))
 	name_edit.add_theme_stylebox_override("focus", _line_edit_style(Color(1.0, 0.98, 0.91, 0.42), GREEN, 1))
 	name_edit.text_submitted.connect(_on_company_name_submitted)
 	add_child(name_edit)
@@ -386,10 +429,10 @@ func _create_text_inputs() -> void:
 	command_edit.add_theme_font_override("font", font)
 	command_edit.add_theme_font_size_override("font_size", 16)
 	command_edit.add_theme_color_override("font_color", TERMINAL_TEXT)
-	command_edit.add_theme_color_override("font_placeholder_color", Color("#879a94"))
+	command_edit.add_theme_color_override("font_placeholder_color", COLD_40)
 	command_edit.add_theme_color_override("caret_color", GREEN_BRIGHT)
-	command_edit.add_theme_stylebox_override("normal", _line_edit_style(Color("#101513"), Color("#27332e"), 6))
-	command_edit.add_theme_stylebox_override("focus", _line_edit_style(Color("#111816"), GREEN, 6))
+	command_edit.add_theme_stylebox_override("normal", _line_edit_style(COLD_99, INK, 6))
+	command_edit.add_theme_stylebox_override("focus", _line_edit_style(COLD_95, GREEN, 6))
 	command_edit.text_submitted.connect(_submit_terminal_command)
 	command_edit.gui_input.connect(_on_night_command_gui_input)
 	add_child(command_edit)
@@ -1521,6 +1564,7 @@ func _start_new_company() -> void:
 	terminal_lines.append("> %s / %s" % [_model_official_name(), _model_private_name()])
 	_sync_system_activity()
 	used_action_ids.clear()
+	used_action_authors.clear()
 	_refresh_week_actions()
 	name_edit.visible = false
 	command_edit.visible = false
@@ -1548,6 +1592,8 @@ func _continue_game() -> void:
 	name_edit.visible = false
 	command_edit.visible = false
 	used_action_ids = _to_string_array(parsed.get("ui_used_actions", []))
+	var authors_value = parsed.get("ui_used_action_authors", {})
+	used_action_authors = authors_value.duplicate(true) if authors_value is Dictionary else {}
 	terminal_lines = _to_string_array(parsed.get("ui_terminal", []))
 	pending_week_advance = bool(parsed.get("ui_pending_week_advance", false))
 	pending_night_id = str(parsed.get("ui_pending_night_id", ""))
@@ -1647,6 +1693,7 @@ func _take_selected_action(use_ai: bool) -> void:
 	else:
 		_play_foley("confirm")
 	used_action_ids.append(action_id)
+	used_action_authors[action_id] = "model" if use_ai else "self"
 	result_title = str(result.get("title", _action_name(action_id)))
 	result_page = 0
 	result_lines = _to_string_array(result.get("messages", result.get("lines", result.get("message", []))))
@@ -1851,6 +1898,7 @@ func _advance_after_week() -> bool:
 		_open_ending(str(ending.get("id", "acquihire")))
 		return true
 	used_action_ids.clear()
+	used_action_authors.clear()
 	_refresh_week_actions()
 	_sync_system_activity()
 	var event_value = advancement.get("event", {})
@@ -2954,7 +3002,7 @@ func _draw_onboarding() -> void:
 	_draw_text("公司设立档案  /  00", Vector2(326, 118), 12, GREEN)
 	_draw_display_text("我们正在招人", Vector2(322, 190), 46, INK)
 	_draw_text("WE'RE HIRING", Vector2(326, 222), 12, BLUE)
-	draw_line(Vector2(326, 246), Vector2(744, 246), Color("#8c9995"), 1.0)
+	draw_line(Vector2(326, 246), Vector2(744, 246), COLD_40, 1.0)
 	_draw_text("现在。湾区。两个人，一张显卡。", Vector2(326, 290), 18, INK)
 	_draw_text("给公司起个名字。它会记住。", Vector2(326, 326), 15, MUTED)
 	_draw_text("公司名称 / COMPANY", Vector2(326, 348), 12, MUTED)
@@ -2973,9 +3021,9 @@ func _draw_onboarding() -> void:
 	if second_run_unlocked:
 		_draw_text("桌上已经有一个不属于现在的马克杯。", Vector2(326, 556), 12, AMBER)
 		_draw_text("结局档案  %d / 7" % seen_endings.size(), Vector2(610, 556), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 136)
-	draw_line(Vector2(326, 590), Vector2(746, 590), Color("#a2aaa5"), 1.0)
+	draw_line(Vector2(326, 590), Vector2(746, 590), COLD_30, 1.0)
 	_draw_text("成人向职场寓言：裁员、倦怠、饮酒与心理不安。无色情或写实暴力。", Vector2(326, 615), 12, MUTED)
-	_draw_text("F11  全屏", Vector2(1018, 663), 12, Color("#cedbdd"))
+	_draw_text("F11  全屏", Vector2(1018, 663), 12, NIGHT_TEXT)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -2985,11 +3033,11 @@ func _draw_chrome() -> void:
 	# rail also keeps navigation independent of whatever props are baked below it.
 	draw_rect(SIDEBAR_SAFE_RECT, SIDEBAR_SURFACE)
 	draw_rect(Rect2(264, 0, 8, 720), Color(0.005, 0.025, 0.035, 0.30))
-	draw_line(Vector2(271, 0), Vector2(271, 720), Color("#31464d"), 1.0)
+	draw_line(Vector2(271, 0), Vector2(271, 720), COLD_70, 1.0)
 	_draw_chrome_reading_surfaces()
-	_draw_text("公司档案", Vector2(26, 48), 12, Color("#83aaa9"))
-	_draw_display_text(str(model.company_name), Vector2(24, 84), 22, Color("#e3e8e4"), HORIZONTAL_ALIGNMENT_LEFT, 218)
-	_draw_text("%s  ·  第 %d 周" % [_chapter_label(), int(model.total_week)], Vector2(26, 112), 12, Color("#9fb0ae"))
+	_draw_text("公司档案", Vector2(26, 48), TYPE_META, NIGHT_MUTED)
+	_draw_display_text(str(model.company_name), Vector2(24, 86), TYPE_SECTION, COLD_05, HORIZONTAL_ALIGNMENT_LEFT, 218)
+	_draw_text("%s  ·  第 %d 周" % [_chapter_label(), int(model.total_week)], Vector2(26, 114), TYPE_META, COLD_30)
 	if save_status_timer > 0.0:
 		draw_circle(Vector2(215, 108), 3.0, GREEN_BRIGHT if save_status_text == "已自动保存" else RED)
 	var nav_names := ["概览", "团队", "经营台账", "日历", "公告栏", "内网"]
@@ -3005,18 +3053,18 @@ func _draw_chrome() -> void:
 		var active := i == active_index
 		var hovered := rect.has_point(mouse_position)
 		if active:
-			draw_colored_polygon(PackedVector2Array([rect.position, rect.position + Vector2(rect.size.x - 12, 0), rect.position + Vector2(rect.size.x, 8), rect.end, rect.position + Vector2(0, rect.size.y)]), Color("#d9ddd6"))
+			draw_colored_polygon(PackedVector2Array([rect.position, rect.position + Vector2(rect.size.x - 12, 0), rect.position + Vector2(rect.size.x, 8), rect.end, rect.position + Vector2(0, rect.size.y)]), COLD_10)
 			draw_rect(Rect2(rect.position, Vector2(4, rect.size.y)), GREEN)
 		elif hovered:
 			draw_rect(rect, Color(0.16, 0.31, 0.35, 0.58))
-		_draw_text("%02d" % (i + 1), rect.position + Vector2(14, 28), 12, GREEN if active else Color("#708b8b"))
-		_draw_text(nav_names[i], rect.position + Vector2(50 + (2 if hovered and not active else 0), 29), 15, INK if active else Color("#c7d0cc"))
+		_draw_text("%02d" % (i + 1), rect.position + Vector2(14, 29), TYPE_META, GREEN if active else COLD_40)
+		_draw_text(nav_names[i], rect.position + Vector2(50 + (2 if hovered and not active else 0), 30), TYPE_BODY, INK if active else COLD_20)
 	if gamepad_focus_visible:
-		_draw_text("LB / RB  翻档", Vector2(26, 486), 12, Color("#83aaa9"))
-	_draw_text("模型登记", Vector2(26, 508), 12, Color("#7f9695"))
-	_draw_text(_model_official_name(), Vector2(26, 536), 15, Color("#d7dfdb"))
+		_draw_text("LB / RB  翻档", Vector2(26, 486), TYPE_META, NIGHT_MUTED)
+	_draw_text("模型登记", Vector2(26, 508), TYPE_META, COLD_40)
+	_draw_text(_model_official_name(), Vector2(26, 537), TYPE_BODY, COLD_05)
 	if int(model.chapter) < 4:
-		_draw_text("团队仍叫它：%s" % _model_private_name(), Vector2(26, 560), 12, Color("#839391"))
+		_draw_text("团队仍叫它：%s" % _model_private_name(), Vector2(26, 561), TYPE_META, COLD_40)
 	_draw_office_debt_indicator(OFFICE_DEBT_RECT)
 
 
@@ -3035,28 +3083,25 @@ func _draw_chrome_reading_surfaces() -> void:
 
 
 func _draw_archive_surface(rect: Rect2, role: String = "main", taped: bool = false) -> void:
-	var fill := READING_PAPER
-	var accent := GREEN
-	match role:
-		"detail":
-			fill = Color("#e9ece6")
-			accent = BLUE
-		"toolbar":
-			fill = READING_PAPER_ALT
-		"footer":
-			fill = Color("#e8ece6")
-		"header":
-			fill = Color("#eaede7")
+	# Two papers, not five. The earlier build gave every surface its own fill and
+	# its own 3px coloured cap, which put four accent bars on one screen and made
+	# five papers that differ by one percent. A folio has one registration line —
+	# on the sheet you are actually reading — and everything else is just paper.
+	var fill := PAPER if role in ["main", "header"] else PAPER_SUNK
 	_draw_panel(Rect2(rect.position + Vector2(7, 9), rect.size), Color(0.005, 0.025, 0.035, 0.24), Color.TRANSPARENT, 2.0, 0.0)
 	draw_rect(rect, fill)
-	draw_rect(rect, Color("#87948f"), false, 1.0)
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x, 3)), accent)
-	draw_line(rect.position + Vector2(12, rect.size.y - 2), rect.end - Vector2(12, 2), Color(0.20, 0.27, 0.25, 0.12), 1.0)
-	if role in ["toolbar", "footer"]:
-		draw_rect(Rect2(rect.position + Vector2(1, 1), Vector2(4, rect.size.y - 2)), Color(accent, 0.78))
+	draw_rect(rect, RULE_STRONG, false, 1.0)
+	if role in ["main", "header"]:
+		# An index tab, not a title bar. A full-width bar of accent across every
+		# sheet is the loudest thing on a screen that is meant to be quiet.
+		draw_rect(Rect2(rect.position, Vector2(72, 3)), GREEN)
+	draw_line(rect.position + Vector2(12, rect.size.y - 2), rect.end - Vector2(12, 2), Color(0.20, 0.27, 0.25, 0.10), 1.0)
 	if taped:
+		# Real tape is translucent: the sheet edge has to keep showing through it.
 		var tape_width := 68.0 if role != "detail" else 54.0
-		draw_rect(Rect2(rect.position + Vector2((rect.size.x - tape_width) * 0.5, -4), Vector2(tape_width, 9)), Color("#a7afa8"))
+		var tape := Rect2(rect.position + Vector2((rect.size.x - tape_width) * 0.5, -5), Vector2(tape_width, 11))
+		draw_rect(tape, Color(WARM_10, 0.34))
+		draw_line(tape.position, tape.position + Vector2(tape_width, 0), Color(COLD_00, 0.30), 1.0)
 
 
 func ui_readability_contract() -> Dictionary:
@@ -3094,7 +3139,7 @@ func ui_readability_contract() -> Dictionary:
 			"ink": INK,
 			"muted": MUTED,
 			"sidebar": SIDEBAR_SURFACE,
-			"sidebar_meta": Color("#708b8b"),
+			"sidebar_meta": COLD_40,
 			"paper_green": PAPER_GREEN,
 			"paper_blue": PAPER_BLUE,
 			"paper_amber": PAPER_AMBER,
@@ -3106,30 +3151,54 @@ func ui_readability_contract() -> Dictionary:
 
 
 func _draw_dashboard() -> void:
+	# No English kicker on a paper surface. The sidebar already dates the sheet;
+	# what the folio owes the player at the top is the title, the chapter's one
+	# question, and the rule of the week — in that order, on three clean lines.
 	var content_origin := Vector2(316, 94)
-	_draw_text("WEEK / %02d" % int(model.total_week), content_origin + Vector2(0, 18), 12, PAPER_GREEN)
-	_draw_display_text("本周待办", content_origin + Vector2(0, 62), 30, INK)
-	_draw_text("本章命题 / %s" % _chapter_story_prompt(), content_origin + Vector2(168, 58), 12, PAPER_BLUE)
+	_draw_display_text("本周待办", content_origin + Vector2(0, 38), TYPE_DISPLAY, INK)
+	_draw_text(_chapter_story_prompt(), content_origin + Vector2(2, 66), TYPE_LABEL, PAPER_BLUE)
 	var chapter_weeks := int(HiringModel.CHAPTERS[int(model.chapter)].get("weeks", 1))
 	var chapter_progress := clampf(float(model.week_in_chapter) / float(maxi(1, chapter_weeks)), 0.0, 1.0)
-	var progress_rect := Rect2(content_origin + Vector2(328, 8), Vector2(112, 3))
-	draw_rect(progress_rect, Color("#b9c0bb"))
+	var progress_rect := Rect2(content_origin + Vector2(328, 14), Vector2(112, 2))
+	draw_rect(progress_rect, COLD_30)
 	draw_rect(Rect2(progress_rect.position, Vector2(progress_rect.size.x * chapter_progress, progress_rect.size.y)), GREEN)
-	_draw_text("本章 %d / %d" % [int(model.week_in_chapter), chapter_weeks], content_origin + Vector2(328, 32), TYPE_META, MUTED)
+	_draw_text("本章 %d / %d" % [int(model.week_in_chapter), chapter_weeks], content_origin + Vector2(328, 38), TYPE_META, MUTED)
 	var week_rule := "每周一点注意力。待签的字会自己排好。" if int(model.chapter) >= 4 else "每周三点注意力。当前有 %d 件待处理。" % week_action_ids.size()
 	if int(model.chapter) == 0 and int(model.total_week) == 1 and bool(model.flags.get("tutorial_actions_seen", false)):
 		week_rule = "林越：四件事，三点注意力。你先挑。"
-	_draw_text(week_rule, content_origin + Vector2(0, 91), 13, MUTED)
+	_draw_text(week_rule, content_origin + Vector2(0, 100), TYPE_LABEL, MUTED)
 	if int(model.memory.get("ui_unsolicited_week", -1)) == int(model.total_week):
-		draw_circle(Vector2(683, 180), 3.0, GREEN_BRIGHT)
-		_draw_text("模型留下了一条未请求的更新", Vector2(695, 184), 12, MUTED)
+		draw_circle(Vector2(683, 170), 3.0, GREEN_BRIGHT)
+		_draw_text("模型留下了一条未请求的更新", Vector2(695, 175), TYPE_META, MUTED)
 	_draw_attention(Vector2(818, 155))
-	_draw_text("处理顺序", Vector2(316, 217), 12, MUTED)
-	draw_line(Vector2(316, 225), Vector2(756, 225), Color("#8f9b96"), 1.0)
+	# No "处理顺序" header: the list is numbered and the rule above it already
+	# says what it is. One redundant label removed is one more line of silence.
+	draw_line(Vector2(316, 225), Vector2(756, 225), RULE_STRONG, 1.0)
 	for i in week_action_ids.size():
 		_draw_action_card(i)
+	_draw_week_register()
 	_draw_action_detail()
 	_draw_stat_cards()
+
+
+func _week_author_label(action_id: String) -> String:
+	return "它" if str(used_action_authors.get(action_id, "self")) == "model" else "你"
+
+
+func _draw_week_register() -> void:
+	# One line at the foot of the folio: how much of this week was yours. It is
+	# the only number the game never states out loud anywhere else.
+	var by_self := 0
+	var by_model := 0
+	for action_id in used_action_ids:
+		if str(used_action_authors.get(action_id, "self")) == "model":
+			by_model += 1
+		else:
+			by_self += 1
+	var pending := maxi(0, week_action_ids.size() - used_action_ids.size())
+	var register := "本周登记 · 尚未处理任何一件。" if used_action_ids.is_empty() else "本周登记 · 你 %d · 它 %d · 未处理 %d" % [by_self, by_model, pending]
+	draw_line(Vector2(316, 546), Vector2(756, 546), RULE_SOFT, 1.0)
+	_draw_text(register, Vector2(316, 566), TYPE_META, MUTED)
 
 
 func _chapter_story_prompt() -> String:
@@ -3143,30 +3212,40 @@ func _chapter_story_prompt() -> String:
 
 
 func _draw_stat_cards() -> void:
+	# A ledger row, not a dashboard. The old version painted each of the five
+	# figures a different accent, which spent the whole semantic palette on
+	# decoration and left red meaning nothing. Here every figure is ink, and a
+	# figure only takes colour when it has crossed into a state the player has to
+	# act on. Debt stays absent on purpose: the office is where it shows.
+	var runway := _runway_weeks()
+	var coherence := int(model.coherence)
 	var stats := [
-		{"label": "现金跑道", "value": "%d 周" % _runway_weeks(), "color": GREEN},
-		{"label": "算力", "value": _format_number(model.compute), "color": BLUE},
-		{"label": "叙事", "value": "%d" % int(model.narrative), "color": AMBER},
-		{"label": "能力", "value": "%d" % int(model.capability), "color": GREEN},
-		{"label": "连贯", "value": "%d" % int(model.coherence), "color": RED if model.coherence < 35 else GREEN}
+		{"label": "现金跑道", "value": "%d 周" % runway, "color": RED if runway <= 4 else INK},
+		{"label": "算力", "value": _format_number(model.compute), "color": INK},
+		{"label": "叙事", "value": "%d" % int(model.narrative), "color": INK},
+		{"label": "能力", "value": "%d" % int(model.capability), "color": INK},
+		{"label": "连贯", "value": "%d" % coherence, "color": RED if coherence < 35 else INK}
 	]
 	var ledger := Rect2(310, 596, 812, 58)
-	draw_line(ledger.position, Vector2(ledger.end.x, ledger.position.y), Color("#7d8c87"), 1.0)
-	draw_line(Vector2(ledger.position.x, ledger.end.y), ledger.end, Color("#9da7a2"), 1.0)
+	draw_line(ledger.position, Vector2(ledger.end.x, ledger.position.y), RULE_STRONG, 1.0)
+	draw_line(Vector2(ledger.position.x, ledger.end.y), ledger.end, RULE_SOFT, 1.0)
 	for i in stats.size():
 		var cell_width := ledger.size.x / float(stats.size())
 		var cell := Rect2(ledger.position + Vector2(cell_width * i, 0), Vector2(cell_width, ledger.size.y))
 		if i > 0:
-			draw_line(cell.position + Vector2(0, 9), cell.position + Vector2(0, cell.size.y - 9), Color("#a8b0ab"), 1.0)
-		_draw_text(str(stats[i]["label"]), cell.position + Vector2(12, 20), 12, MUTED)
-		_draw_display_text(str(stats[i]["value"]), cell.position + Vector2(12, 48), 18, Color(stats[i]["color"]))
+			draw_line(cell.position + Vector2(0, 11), cell.position + Vector2(0, cell.size.y - 11), RULE_SOFT, 1.0)
+		_draw_text(str(stats[i]["label"]), cell.position + Vector2(12, 21), TYPE_META, MUTED)
+		_draw_display_text(str(stats[i]["value"]), cell.position + Vector2(12, 48), TYPE_SECTION, Color(stats[i]["color"]))
 
 
 func _draw_attention(position: Vector2) -> void:
-	_draw_text("注意力", position, 11, MUTED)
+	_draw_text("注意力", position, TYPE_META, MUTED)
 	for i in int(model.attention_max):
 		var center := position + Vector2(68 + i * 26, -5)
-		draw_circle(center, 8.0, GREEN if i < int(model.attention) else Color("#c8ccc8"))
+		var spent := i >= int(model.attention)
+		draw_circle(center, 8.0, GREEN if not spent else Color(COLD_30, 0.55))
+		if spent:
+			draw_arc(center, 8.0, 0.0, TAU, 24, COLD_30, 1.0)
 
 
 func _draw_action_card(index: int) -> void:
@@ -3186,15 +3265,18 @@ func _draw_action_card(index: int) -> void:
 		draw_rect(Rect2(visual_rect.position, Vector2(3, visual_rect.size.y)), GREEN)
 	if _focus_is("dashboard_actions", index):
 		_draw_panel(visual_rect.grow(3.0), Color.TRANSPARENT, GREEN_BRIGHT, RADIUS_CONTROL + 2.0, 2.0)
-	draw_line(Vector2(visual_rect.position.x, visual_rect.end.y), visual_rect.end, Color("#a1aaa5"), 1.0)
-	var category_color := _category_color(str(action.get("category", "运营")))
-	var category_text_color := category_color.darkened(0.18)
-	draw_circle(visual_rect.position + Vector2(20, 27), 10.0, category_color if active else Color(category_color, 0.20))
-	_draw_text("%d" % (index + 1), visual_rect.position + Vector2(16, 31), 12, Color.WHITE if active else category_color)
-	_draw_text(str(action.get("name", action_id)), visual_rect.position + Vector2(48, 31), 15, MUTED if used or not available else INK)
-	_draw_text(_category_label(str(action.get("category", "operations"))), visual_rect.position + Vector2(visual_rect.size.x - 76, 31), 12, category_text_color)
+	draw_line(Vector2(visual_rect.position.x, visual_rect.end.y), visual_rect.end, RULE_SOFT, 1.0)
+	# A register line, not a chip. Five categories used to mean five hues in a
+	# palette that already spends green on "executable" and amber on "human" —
+	# so the numeral is just a numeral, and the category stays a word.
+	_draw_display_text("%02d" % (index + 1), visual_rect.position + Vector2(14, 33), TYPE_LABEL, GREEN if active else COLD_40)
+	_draw_text(str(action.get("name", action_id)), visual_rect.position + Vector2(48, 33), TYPE_ACTION, MUTED if used or not available else INK)
+	_draw_text(_category_label(str(action.get("category", "operations"))), visual_rect.position + Vector2(visual_rect.size.x - 76, 32), TYPE_META, MUTED)
 	if used:
-		_draw_folio_stamp(Rect2(visual_rect.end.x - 82, visual_rect.position.y + 9, 70, 34), "已处理", MUTED, -0.045)
+		# The stamp records the author, not the fact. Delegated rows come out in
+		# registration green and read as the tidier ones — which is the point.
+		var by_model := str(used_action_authors.get(action_id, "self")) == "model"
+		_draw_folio_stamp(Rect2(visual_rect.end.x - 68, visual_rect.position.y + 9, 56, 34), _week_author_label(action_id), PAPER_GREEN if by_model else MUTED, -0.045)
 	elif not available:
 		var blocked_reason := _action_unavailable_reason(action_id, false)
 		_draw_text(blocked_reason, visual_rect.position + Vector2(visual_rect.size.x - 238, 48), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 222)
@@ -3204,21 +3286,24 @@ func _draw_action_card(index: int) -> void:
 
 func _draw_action_detail() -> void:
 	var rect := Rect2(790, 186, 332, 390)
-	_draw_text("行动批注 / ACTION NOTE", rect.position + Vector2(0, 25), 12, PAPER_GREEN)
+	_draw_text("行动批注", rect.position + Vector2(0, 25), TYPE_META, PAPER_GREEN)
 	if int(model.chapter) == 0 and int(model.total_week) == 1 and bool(model.flags.get("tutorial_actions_seen", false)):
-		draw_circle(rect.position + Vector2(174, 20), 3.0, GREEN_BRIGHT)
-		_draw_text("林越在隔壁 · GPU 正常", rect.position + Vector2(184, 25), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 148)
-	draw_line(rect.position + Vector2(0, 36), rect.position + Vector2(rect.size.x, 36), Color("#879590"), 1.0)
+		draw_circle(rect.position + Vector2(174, 21), 3.0, GREEN_BRIGHT)
+		_draw_text("林越在隔壁 · GPU 正常", rect.position + Vector2(184, 25), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 148)
+	draw_line(rect.position + Vector2(0, 36), rect.position + Vector2(rect.size.x, 36), RULE_STRONG, 1.0)
 	if week_action_ids.is_empty():
 		return
 	var action_id := week_action_ids[selected_action]
 	var action := _action_data(action_id)
-	_draw_text(_category_label(str(action.get("category", "operations"))), rect.position + Vector2(0, 64), 12, _category_color(str(action.get("category", "operations"))).darkened(0.18))
-	_draw_display_text(str(action.get("name", action_id)), rect.position + Vector2(0, 104), 25, INK)
-	_draw_multiline(_action_display_description(action_id, action), Rect2(rect.position + Vector2(0, 124), Vector2(rect.size.x, 78)), 14, MUTED, 23)
-	_draw_text("执行结果", rect.position + Vector2(0, 226), TYPE_META, MUTED)
-	_draw_text("亲自  %s" % _action_effect_summary(action_id, false), rect.position + Vector2(0, 252), TYPE_META, INK, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x)
-	_draw_text("委托  %s" % _action_effect_summary(action_id, true), rect.position + Vector2(0, 278), TYPE_META, PAPER_GREEN, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x)
+	_draw_text(_category_label(str(action.get("category", "operations"))), rect.position + Vector2(0, 64), TYPE_META, MUTED)
+	_draw_display_text(str(action.get("name", action_id)), rect.position + Vector2(0, 100), TYPE_SECTION, INK)
+	_draw_multiline(_action_display_description(action_id, action), Rect2(rect.position + Vector2(0, 118), Vector2(rect.size.x, 86)), TYPE_BODY, MUTED, 26)
+	draw_line(rect.position + Vector2(0, 218), rect.position + Vector2(rect.size.x, 218), RULE_SOFT, 1.0)
+	_draw_text("执行结果", rect.position + Vector2(0, 238), TYPE_META, MUTED)
+	_draw_text("亲自", rect.position + Vector2(0, 264), TYPE_META, MUTED)
+	_draw_text(_action_effect_summary(action_id, false), rect.position + Vector2(44, 264), TYPE_META, INK, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 44)
+	_draw_text("委托", rect.position + Vector2(0, 288), TYPE_META, MUTED)
+	_draw_text(_action_effect_summary(action_id, true), rect.position + Vector2(44, 288), TYPE_META, PAPER_GREEN, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 44)
 	var self_button := _action_self_rect()
 	var ai_button := _action_ai_rect()
 	var used := used_action_ids.has(action_id)
@@ -3235,32 +3320,35 @@ func _draw_action_detail() -> void:
 	var end_button := _end_week_rect()
 	_draw_ledger_button(end_button, "确认空过" if end_week_confirm_pending else "结束本周", _gamepad_shortcut("Y", "E"), "danger" if end_week_confirm_pending else "attention")
 	if bool(model.flags.get("never_delegated_question", false)):
-		_draw_text("LANTERN：你从未让我替你写过。为什么？", rect.position + Vector2(0, 390), 12, MUTED)
+		_draw_text("LANTERN：你从未让我替你写过。为什么？", rect.position + Vector2(0, 391), TYPE_META, MUTED)
 
 
 func _draw_team() -> void:
 	var area := Rect2(306, 88, 912, 552)
-	_draw_text("PERSONNEL LEDGER  /  %02d" % int(model.total_week), area.position + Vector2(0, 18), 12, PAPER_GREEN)
-	_draw_display_text("团队", area.position + Vector2(0, 58), 30, INK)
-	_draw_text("技能、士气，以及他们还相信多少。", area.position + Vector2(110, 55), 13, MUTED)
+	_draw_display_text("团队", area.position + Vector2(0, 30), TYPE_DISPLAY, INK)
+	_draw_text("技能、士气，以及他们还相信多少。", area.position + Vector2(2, 54), TYPE_LABEL, MUTED)
 	var total_people := _team_administrative_count()
-	_draw_folio_stamp(Rect2(1070, 94, 134, 46), "%d 人在职" % total_people, GREEN, -0.025)
 
 	# One continuous personnel ledger. Rows belong to the same sheet instead of
-	# becoming a stack of SaaS cards.
+	# becoming a stack of SaaS cards, and the sheet stays ruled all the way down:
+	# a hiring ledger with empty lines left in it is the title of the game.
 	var table := Rect2(306, 154, 596, 476)
-	draw_rect(table, Color("#edf0e9"))
-	draw_rect(Rect2(table.position, Vector2(table.size.x, 46)), Color("#dfe6e0"))
-	draw_line(table.position, Vector2(table.end.x, table.position.y), Color("#778681"), 1.0)
-	draw_line(Vector2(table.position.x, table.end.y), table.end, Color("#8f9a95"), 1.0)
+	draw_rect(table, COLD_05)
+	draw_line(table.position, Vector2(table.end.x, table.position.y), RULE_STRONG, 1.0)
+	draw_line(Vector2(table.position.x, table.end.y), table.end, RULE_STRONG, 1.0)
 	var headers := ["姓名", "角色", "技能", "士气", "信念", "状态"]
 	var widths := [106, 148, 58, 58, 58, 94]
+	var numeric_columns := [2, 3, 4]
 	var x := table.position.x + 14.0
 	for i in headers.size():
-		_draw_text(headers[i], Vector2(x, table.position.y + 31), 12, MUTED)
+		var header_align := HORIZONTAL_ALIGNMENT_RIGHT if i in numeric_columns else HORIZONTAL_ALIGNMENT_LEFT
+		_draw_text(headers[i], Vector2(x, table.position.y + 32), TYPE_META, MUTED, header_align, widths[i] - 18)
 		x += widths[i]
-	draw_line(Vector2(table.position.x + 14, table.position.y + 45), Vector2(table.end.x - 14, table.position.y + 45), Color("#8f9b96"), 1.0)
+	draw_line(Vector2(table.position.x + 14, table.position.y + 45), Vector2(table.end.x - 14, table.position.y + 45), RULE_STRONG, 1.0)
 	var visible_employees := _team_visible_employees(TEAM_ROWS_PER_PAGE)
+	for blank_row in range(visible_employees.size(), TEAM_ROWS_PER_PAGE):
+		var blank_y := table.position.y + 76.0 + blank_row * 39.0
+		draw_line(Vector2(table.position.x + 14, blank_y + 14), Vector2(table.end.x - 14, blank_y + 14), Color(RULE_SOFT, 0.55), 1.0)
 	for row in visible_employees.size():
 		var employee: Dictionary = visible_employees[row]
 		var profile := _employee_profile(employee)
@@ -3285,9 +3373,14 @@ func _draw_team() -> void:
 		x = table.position.x + 14.0
 		for col in values.size():
 			var value_color := INK if col < 2 else (PAPER_GREEN if col == 5 and status in ["已提交", "本周入职"] else MUTED)
-			_draw_text(values[col], Vector2(x, y), 12, value_color, HORIZONTAL_ALIGNMENT_LEFT, widths[col] - 8)
+			if col in numeric_columns:
+				# Figures line up on their right edge, so a column can be compared
+				# without being read.
+				_draw_display_text(values[col], Vector2(x, y), TYPE_LABEL, value_color, HORIZONTAL_ALIGNMENT_RIGHT, widths[col] - 18)
+			else:
+				_draw_text(values[col], Vector2(x, y), TYPE_BODY if col == 0 else TYPE_LABEL, value_color, HORIZONTAL_ALIGNMENT_LEFT, widths[col] - 8)
 			x += widths[col]
-		draw_line(Vector2(table.position.x + 14, y + 14), Vector2(table.end.x - 14, y + 14), Color("#b8beb8"), 1.0)
+		draw_line(Vector2(table.position.x + 14, y + 14), Vector2(table.end.x - 14, y + 14), RULE_SOFT, 1.0)
 	var page_start := team_page * TEAM_ROWS_PER_PAGE
 	var page_end := mini(model.employees.size(), page_start + visible_employees.size())
 	_draw_text("显示 %d–%d / %d 位成员 · 创始人未列入" % [page_start + 1 if not visible_employees.is_empty() else 0, page_end, model.employees.size()], table.position + Vector2(14, table.size.y - 15), TYPE_META, MUTED)
@@ -3297,18 +3390,21 @@ func _draw_team() -> void:
 		_draw_page_button(_team_next_rect(), "›", team_page + 1 < _team_page_count())
 
 	# The narrow clipped sheet is evidence, not a second dashboard.
+	_draw_text("组织与工位", Vector2(924, 118), TYPE_META, MUTED)
+	draw_line(Vector2(924, 130), Vector2(1218, 130), RULE_STRONG, 1.0)
 	var org := Rect2(924, 154, 294, 132)
-	draw_rect(org, Color("#e5eae5"))
-	draw_line(org.position, Vector2(org.end.x, org.position.y), Color("#7f8d88"), 1.0)
-	draw_line(Vector2(org.position.x, org.end.y), org.end, Color("#9aa49f"), 1.0)
-	draw_line(org.position + Vector2(148, 15), org.position + Vector2(148, 103), Color("#a5ada8"), 1.0)
-	_draw_text("组织架构", org.position + Vector2(12, 27), 12, MUTED)
-	_draw_display_text("%d" % total_people, org.position + Vector2(12, 77), 32, INK)
-	_draw_text("在职", org.position + Vector2(72, 76), 12, MUTED)
+	draw_rect(org, COLD_10)
+	draw_line(org.position, Vector2(org.end.x, org.position.y), RULE_STRONG, 1.0)
+	draw_line(Vector2(org.position.x, org.end.y), org.end, RULE_STRONG, 1.0)
+	draw_line(org.position + Vector2(148, 15), org.position + Vector2(148, 103), RULE_SOFT, 1.0)
+	_draw_text("组织架构", org.position + Vector2(12, 28), TYPE_META, MUTED)
+	_draw_display_text("%d" % total_people, org.position + Vector2(12, 82), TYPE_DISPLAY, INK)
+	_draw_text("在职", org.position + Vector2(76, 80), TYPE_META, MUTED)
 	var payroll_people: int = maxi(0, total_people - 1)
-	_draw_text("工资表", org.position + Vector2(164, 27), 12, MUTED)
-	_draw_display_text("%d" % payroll_people, org.position + Vector2(164, 74), 24, PAPER_GREEN)
-	_draw_text("同步状态  %d / %d" % [total_people, total_people], org.position + Vector2(12, 112), 12, MUTED)
+	_draw_text("工资表", org.position + Vector2(164, 28), TYPE_META, MUTED)
+	_draw_display_text("%d" % payroll_people, org.position + Vector2(164, 82), TYPE_DISPLAY, INK)
+	_draw_text("在册", org.position + Vector2(200, 80), TYPE_META, MUTED)
+	_draw_text("同步状态  %d / %d" % [total_people, total_people], org.position + Vector2(12, 114), TYPE_META, MUTED)
 	if bool(model.flags.get("window_desks", false)):
 		if bool(model.flags.get("window_curtain_closed", false)):
 			_draw_closed_window(Rect2(924, 306, 294, 324))
@@ -3341,28 +3437,34 @@ func _draw_team_signals(rect: Rect2) -> void:
 	var evidence_texture: Texture2D = art_title if model.employees.size() <= 3 else art_office_day
 	_draw_texture_cover(evidence_texture, evidence, Color(0.78, 0.84, 0.84, 1.0), Vector2(0.58, 0.58))
 	draw_rect(evidence, Color(0.01, 0.045, 0.06, 0.46))
-	draw_rect(evidence, Color("#60747a"), false, 1.0)
-	draw_rect(Rect2(evidence.position, Vector2(4, evidence.size.y)), GREEN_BRIGHT)
-	_draw_text("工位证据 / 创始办公室", evidence.position + Vector2(16, 25), 12, Color("#c7d7d5"))
-	_draw_display_text("%d 个登记工位" % _team_administrative_count(), evidence.position + Vector2(16, 55), 20, Color("#eef2ed"))
+	draw_rect(evidence, COLD_50, false, 1.0)
+	_draw_text("工位证据 · 创始办公室", evidence.position + Vector2(16, 26), TYPE_META, COLD_20)
+	_draw_display_text("%d 个登记工位" % _team_administrative_count(), evidence.position + Vector2(16, 60), TYPE_SECTION, COLD_05)
 	if _team_desk_signal() == "chen_three_cups":
 		for i in 3:
-			_draw_cup_icon(evidence.position + Vector2(174 + i * 38, 91), 0.45, Color("#e3e7e2"), Color("#9b7255"))
-		_draw_text("陈小雨的桌面 · 三个杯子", evidence.position + Vector2(16, 137), 12, Color("#d9c3a2"))
+			_draw_cup_icon(evidence.position + Vector2(174 + i * 38, 91), 0.45, COLD_10, WARM_70)
+		_draw_text("陈小雨的桌面 · 三个杯子", evidence.position + Vector2(16, 137), TYPE_META, WARM_20)
 	else:
-		_draw_text("个人桌面 · 当前没有可展示的桌面信号", evidence.position + Vector2(16, 137), 12, Color("#b7c6c4"))
-	_draw_text("团队信号", rect.position + Vector2(0, 184), 12, MUTED)
-	draw_line(rect.position + Vector2(0, 193), rect.position + Vector2(rect.size.x, 193), Color("#8f9b96"), 1.0)
+		_draw_text("个人桌面 · 当前没有可展示的桌面信号", evidence.position + Vector2(16, 137), TYPE_META, COLD_30)
+	# Three ruled figures, not three progress bars. Meters in a game about a
+	# company measuring its people are exactly the borrowed vocabulary the art
+	# direction rules out, and they spent three accents on decoration.
+	_draw_text("团队信号", rect.position + Vector2(0, 186), TYPE_META, MUTED)
+	draw_line(rect.position + Vector2(0, 195), rect.position + Vector2(rect.size.x, 195), RULE_STRONG, 1.0)
+	# Capability is a reading, not an alarm: 12 in week one is simply where you
+	# start. Only the two figures that can actually collapse take consequence red.
 	var signals := [
-		{"label": "平均士气", "value": int(model.morale), "color": GREEN},
-		{"label": "能力密度", "value": int(model.capability), "color": BLUE},
-		{"label": "叙事一致", "value": int(model.coherence), "color": AMBER}
+		{"label": "平均士气", "value": int(model.morale), "alarm": true},
+		{"label": "能力密度", "value": int(model.capability), "alarm": false},
+		{"label": "叙事一致", "value": int(model.coherence), "alarm": true}
 	]
 	for i in signals.size():
-		var y := rect.position.y + 219.0 + i * 34.0
-		_draw_text(str(signals[i]["label"]), Vector2(rect.position.x, y), 12, MUTED)
-		draw_rect(Rect2(rect.position + Vector2(86, y - rect.position.y - 7), Vector2(rect.size.x - 86, 4)), Color("#c7ccc6"))
-		draw_rect(Rect2(rect.position + Vector2(86, y - rect.position.y - 7), Vector2((rect.size.x - 86) * clampf(float(signals[i]["value"]) / 100.0, 0.0, 1.0), 4)), Color(signals[i]["color"]))
+		var y := rect.position.y + 227.0 + i * 38.0
+		var value := int(signals[i]["value"])
+		var alarmed: bool = bool(signals[i]["alarm"]) and value < 35
+		_draw_text(str(signals[i]["label"]), Vector2(rect.position.x, y), TYPE_LABEL, MUTED)
+		_draw_display_text("%d" % value, Vector2(rect.position.x, y), TYPE_SECTION, RED if alarmed else INK, HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x)
+		draw_line(Vector2(rect.position.x, y + 14), Vector2(rect.end.x, y + 14), Color(RULE_SOFT, 0.7), 1.0)
 
 
 func _draw_window_desks(rect: Rect2) -> void:
@@ -3420,15 +3522,15 @@ func _draw_origin_editor_overlay() -> void:
 	draw_rect(Rect2(modal.position + Vector2(9, 11), modal.size), Color(0.0, 0.02, 0.025, 0.30))
 	draw_rect(left_page, Color(0.90, 0.925, 0.91, 0.99))
 	draw_rect(right_page, Color(0.95, 0.925, 0.85, 0.99))
-	draw_rect(left_page, Color("#7f8e88"), false, 1.0)
-	draw_rect(right_page, Color("#9b8f78"), false, 1.0)
-	draw_rect(Rect2(modal.position + Vector2(338, 0), Vector2(16, modal.size.y)), Color("#39423e"))
-	draw_line(modal.position + Vector2(346, 8), modal.position + Vector2(346, modal.size.y - 8), Color("#66736e"), 1.0)
-	draw_rect(Rect2(modal.position + Vector2(310, -5), Vector2(88, 12)), Color("#a7ada5"))
+	draw_rect(left_page, COLD_40, false, 1.0)
+	draw_rect(right_page, WARM_40, false, 1.0)
+	draw_rect(Rect2(modal.position + Vector2(338, 0), Vector2(16, modal.size.y)), COLD_70)
+	draw_line(modal.position + Vector2(346, 8), modal.position + Vector2(346, modal.size.y - 8), COLD_50, 1.0)
+	draw_rect(Rect2(modal.position + Vector2(310, -5), Vector2(88, 12)), COLD_30)
 	_draw_text("校改卷宗 / 我们的起源", left_page.position + Vector2(26, 35), 12, GREEN)
 	_draw_display_text("第三遍。", left_page.position + Vector2(26, 83), 25, INK)
 	_draw_multiline("你终于认出：『先这样』是林越说的。文章里写的是『我们说』。\n你想去改。光标一直闪。", Rect2(left_page.position + Vector2(26, 101), Vector2(286, 86)), 14, MUTED, 23)
-	draw_line(left_page.position + Vector2(26, 206), left_page.position + Vector2(left_page.size.x - 26, 206), Color("#9ba7a1"), 1.0)
+	draw_line(left_page.position + Vector2(26, 206), left_page.position + Vector2(left_page.size.x - 26, 206), COLD_40, 1.0)
 	_draw_text("原文摘录", left_page.position + Vector2(26, 235), TYPE_META, MUTED)
 	_draw_text("那天，我们说：『先这样。』", left_page.position + Vector2(26, 278), 15, INK)
 	_draw_text("后来，这三个字成了某种精神……", left_page.position + Vector2(26, 318), 14, MUTED)
@@ -3439,14 +3541,14 @@ func _draw_origin_editor_overlay() -> void:
 	draw_line(left_page.position + Vector2(208, 348), left_page.position + Vector2(244, 329), Color(AMBER, 0.52), 1.0)
 	_draw_text("未保存的修改  0", right_page.position + Vector2(180, 35), TYPE_META, GREEN, HORIZONTAL_ALIGNMENT_RIGHT, 146)
 	_draw_text("我们的起源.md", right_page.position + Vector2(28, 80), TYPE_META, MUTED)
-	draw_line(right_page.position + Vector2(28, 94), right_page.position + Vector2(right_page.size.x - 28, 94), Color("#b4a992"), 1.0)
+	draw_line(right_page.position + Vector2(28, 94), right_page.position + Vector2(right_page.size.x - 28, 94), WARM_40, 1.0)
 	_draw_text("待校改句", right_page.position + Vector2(28, 125), TYPE_META, MUTED)
 	_draw_text("那天，我们说：『先这样。』", right_page.position + Vector2(28, 166), 15, INK)
 	_draw_text("后来，这三个字成了某种精神……", right_page.position + Vector2(28, 207), 14, MUTED)
 	if reduced_motion or fmod(_motion_clock(), 1.0) < 0.56:
 		var cursor_x := right_page.position.x + 28.0 + font.get_string_size("那天，我们说：『先这样。』", HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 2.0
 		draw_rect(Rect2(cursor_x, right_page.position.y + 150, 2, 20), GREEN)
-	draw_line(right_page.position + Vector2(28, 232), right_page.position + Vector2(right_page.size.x - 28, 232), Color("#b4a992"), 1.0)
+	draw_line(right_page.position + Vector2(28, 232), right_page.position + Vector2(right_page.size.x - 28, 232), WARM_40, 1.0)
 	_draw_multiline("改成『林越说』？她已经不在这里了。新人会去查她是谁，然后什么也查不到。", Rect2(right_page.position + Vector2(28, 263), Vector2(298, 82)), 12, MUTED, 21)
 	_draw_folio_stamp(Rect2(right_page.position + Vector2(188, 344), Vector2(128, 46)), "未提交", AMBER, -0.025)
 	var close_button := _origin_editor_close_rect()
@@ -3461,9 +3563,9 @@ func _draw_board_presentation() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.01, 0.04, 0.055, 0.67))
 	var screen_rect := Rect2(142, 54, 996, 556)
 	draw_rect(Rect2(screen_rect.position + Vector2(16, 18), screen_rect.size), Color(0.0, 0.0, 0.0, 0.34))
-	draw_rect(screen_rect, Color("#f5f6f2"))
-	draw_rect(screen_rect, Color("#6d7b74"), false, 1.0)
-	draw_rect(Rect2(screen_rect.position + Vector2(-10, -6), Vector2(screen_rect.size.x + 20, 7)), Color("#647069"))
+	draw_rect(screen_rect, COLD_00)
+	draw_rect(screen_rect, COLD_50, false, 1.0)
+	draw_rect(Rect2(screen_rect.position + Vector2(-10, -6), Vector2(screen_rect.size.x + 20, 7)), COLD_50)
 	var phase := str(model.memory.get("board_presentation_phase", "chart"))
 	if phase == "aftermath":
 		_draw_board_aftermath(screen_rect)
@@ -3479,32 +3581,32 @@ func _draw_board_presentation() -> void:
 		draw_rect(Rect2(seam_x - 8.0, screen_rect.position.y + 1.0, 16.0, screen_rect.size.y - 2.0), Color(0.78, 0.88, 0.82, 0.20 * (1.0 - progress)))
 
 	var continue_button := _board_continue_rect()
-	draw_rect(continue_button, Color("#17201d"))
+	draw_rect(continue_button, INK)
 	draw_rect(continue_button, GREEN_BRIGHT, false, 1.0)
 	draw_line(continue_button.position, Vector2(continue_button.end.x, continue_button.position.y), GREEN_BRIGHT, 2.0)
 	var continue_label := "跳过换页动画   ENTER" if phase == "chart" and _board_transition_progress() < 1.0 else ("继续会议记录   ENTER" if phase == "chart" else "会议结束   ENTER")
 	continue_label = continue_label.replace("ENTER", _gamepad_shortcut("A", "ENTER"))
-	_draw_text_centered(continue_label, continue_button, 12, Color("#dce6df"), 3.0)
-	_draw_text("LANTERN / BOARD DECK", Vector2(142, 32), 10, Color("#72837a"))
-	_draw_text("你还没开口，屏幕换页了。" if phase == "chart" else "会议记录继续生成。", Vector2(152, 647), 11, Color("#9caaa2"))
-	_draw_text("投影端已接管换页", Vector2(152, 674), 10, Color("#68766f"))
+	_draw_text_centered(continue_label, continue_button, 12, COLD_10, 3.0)
+	_draw_text("LANTERN / BOARD DECK", Vector2(142, 32), 10, COLD_50)
+	_draw_text("你还没开口，屏幕换页了。" if phase == "chart" else "会议记录继续生成。", Vector2(152, 647), 11, COLD_30)
+	_draw_text("投影端已接管换页", Vector2(152, 674), 10, COLD_50)
 
 
 func _draw_board_metric_slide(rect: Rect2) -> void:
-	draw_rect(rect, Color("#f5f6f2"))
+	draw_rect(rect, COLD_00)
 	_draw_text("QUARTERLY OPERATING REVIEW", rect.position + Vector2(54, 45), 11, GREEN)
 	_draw_display_text("增长很漂亮。", rect.position + Vector2(54, 94), 31, INK)
 	_draw_text("团队怎么样？", rect.position + Vector2(54, 125), 14, MUTED)
 	var colors := [GREEN, BLUE, AMBER]
 	var labels := ["增长", "留存", "响应"]
 	var metric_band := Rect2(rect.position + Vector2(54, 164), Vector2(858, 126))
-	draw_rect(metric_band, Color("#edf0eb"))
-	draw_line(metric_band.position, Vector2(metric_band.end.x, metric_band.position.y), Color("#9aa49e"), 1.0)
-	draw_line(Vector2(metric_band.position.x, metric_band.end.y), metric_band.end, Color("#aab2ac"), 1.0)
+	draw_rect(metric_band, COLD_05)
+	draw_line(metric_band.position, Vector2(metric_band.end.x, metric_band.position.y), COLD_40, 1.0)
+	draw_line(Vector2(metric_band.position.x, metric_band.end.y), metric_band.end, COLD_30, 1.0)
 	for card in 3:
 		var card_rect := Rect2(rect.position + Vector2(54 + card * 286, 164), Vector2(252, 126))
 		if card > 0:
-			draw_line(Vector2(card_rect.position.x - 17, card_rect.position.y + 12), Vector2(card_rect.position.x - 17, card_rect.end.y - 12), Color("#aeb6b0"), 1.0)
+			draw_line(Vector2(card_rect.position.x - 17, card_rect.position.y + 12), Vector2(card_rect.position.x - 17, card_rect.end.y - 12), COLD_30, 1.0)
 		_draw_text(labels[card], card_rect.position + Vector2(18, 27), 10, MUTED)
 		_draw_display_text(["+42%", "91%", "0.8s"][card], card_rect.position + Vector2(18, 71), 27, colors[card])
 		for point in 7:
@@ -3519,13 +3621,13 @@ func _draw_board_metric_slide(rect: Rect2) -> void:
 	_draw_texture_cover(art_boardroom, context_strip, Color(0.70, 0.76, 0.77, 1.0), Vector2(0.50, 0.70))
 	draw_rect(context_strip, Color(0.015, 0.055, 0.07, 0.56))
 	draw_rect(Rect2(context_strip.position, Vector2(5, context_strip.size.y)), GREEN_BRIGHT)
-	_draw_text("OPERATING CONTEXT / BOARD ROOM B", context_strip.position + Vector2(22, 28), 10, Color("#c9dcda"))
-	_draw_text("漂亮的数字坐在没有人的椅子前面。", context_strip.position + Vector2(22, context_strip.size.y - 24), 13, Color("#edf4f1"))
+	_draw_text("OPERATING CONTEXT / BOARD ROOM B", context_strip.position + Vector2(22, 28), 10, COLD_20)
+	_draw_text("漂亮的数字坐在没有人的椅子前面。", context_strip.position + Vector2(22, context_strip.size.y - 24), 13, COLD_05)
 	_draw_text("数据与配色由 LANTERN 准备 · 配色已保存为手机壁纸", rect.position + Vector2(54, 510), 11, MUTED)
 
 
 func _draw_board_org_slide(rect: Rect2, reveal: float = 1.0) -> void:
-	draw_rect(rect, Color("#f5f6f2"))
+	draw_rect(rect, COLD_00)
 	_draw_text("QUARTERLY OPERATING REVIEW  /  组织", rect.position + Vector2(48, 42), 11, GREEN)
 	_draw_display_text("组织架构", rect.position + Vector2(48, 83), 27, INK)
 	_draw_text("本季度人员流动", rect.position + Vector2(780, 77), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 150)
@@ -3536,7 +3638,7 @@ func _draw_board_org_slide(rect: Rect2, reveal: float = 1.0) -> void:
 		var node_reveal := clampf((reveal - float(index) * 0.009) / 0.65, 0.0, 1.0)
 		var node := Rect2(rect.position + Vector2(56 + column * 126, 118 + row * 49), Vector2(104, 30))
 		var active := index < BOARD_ORG_ACTIVE_COUNT
-		var fill := Color("#e4eee7") if active else Color("#f2e5e3")
+		var fill := COLD_10 if active else WARM_05
 		var edge := GREEN if active else RED
 		fill.a = node_reveal
 		edge.a = node_reveal
@@ -3547,9 +3649,9 @@ func _draw_board_org_slide(rect: Rect2, reveal: float = 1.0) -> void:
 		draw_rect(node, edge, false, 1.0)
 		_draw_text("在职" if active else "离开", node.position + Vector2(12, 20), 9, Color(edge, node_reveal))
 	var statement := Rect2(rect.position + Vector2(48, 430), Vector2(900, 76))
-	draw_rect(statement, Color("#edf2ed"))
-	draw_line(statement.position, Vector2(statement.end.x, statement.position.y), Color("#a7b1aa"), 1.0)
-	draw_line(Vector2(statement.position.x, statement.end.y), statement.end, Color("#c0c8c2"), 1.0)
+	draw_rect(statement, COLD_05)
+	draw_line(statement.position, Vector2(statement.end.x, statement.position.y), COLD_30, 1.0)
+	draw_line(Vector2(statement.position.x, statement.end.y), statement.end, COLD_20, 1.0)
 	_draw_display_text("自然流失率 11%", statement.position + Vector2(22, 36), 23, GREEN)
 	_draw_text("低于行业中位数。", statement.position + Vector2(266, 35), 14, INK)
 	_draw_text("绿色框 %d  ·  红色框 %d" % [BOARD_ORG_ACTIVE_COUNT, BOARD_ORG_EXIT_COUNT], statement.position + Vector2(696, 34), 10, MUTED)
@@ -3560,13 +3662,13 @@ func _draw_board_aftermath(rect: Rect2) -> void:
 	draw_rect(Rect2(rect.position, rect.size), Color(0.03, 0.045, 0.038, 0.78))
 	var record := Rect2(rect.position + Vector2(118, 90), Vector2(760, 374))
 	draw_rect(Rect2(record.position + Vector2(8, 9), record.size), Color(0.0, 0.02, 0.025, 0.22))
-	draw_rect(record, Color("#edf1ed"))
-	draw_rect(record, Color("#7f9089"), false, 1.0)
+	draw_rect(record, COLD_05)
+	draw_rect(record, COLD_40, false, 1.0)
 	draw_rect(Rect2(record.position, Vector2(6, record.size.y)), GREEN)
-	draw_rect(Rect2(record.position + Vector2(330, -5), Vector2(86, 12)), Color("#9da69f"))
+	draw_rect(Rect2(record.position + Vector2(330, -5), Vector2(86, 12)), COLD_40)
 	_draw_text("MEETING RECORD  /  自动生成", record.position + Vector2(34, 38), 10, GREEN)
 	_draw_display_text("董事会继续到了下一页。", record.position + Vector2(34, 84), 25, INK)
-	draw_line(record.position + Vector2(34, 98), record.position + Vector2(record.size.x - 34, 98), Color("#aab5ae"), 1.0)
+	draw_line(record.position + Vector2(34, 98), record.position + Vector2(record.size.x - 34, 98), COLD_30, 1.0)
 	_draw_paragraph_array(_board_presentation_copy(), Rect2(record.position + Vector2(34, 112), Vector2(record.size.x - 68, 216)), 15, INK, 27)
 
 
@@ -3682,17 +3784,17 @@ func _advance_live_replay() -> void:
 func _draw_live_replay() -> void:
 	_draw_art_background(art_boardroom, Color(0.44, 0.52, 0.56, 1.0))
 	draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.01, 0.04, 0.052, 0.84))
-	_draw_text("会议录像 / 19:42 / 会议室 B", Vector2(44, 48), 12, Color("#9cb2ae"))
-	_draw_text("本地回放", Vector2(1100, 48), 12, Color("#83928e"), HORIZONTAL_ALIGNMENT_RIGHT, 130)
+	_draw_text("会议录像 / 19:42 / 会议室 B", Vector2(44, 48), 12, COLD_30)
+	_draw_text("本地回放", Vector2(1100, 48), 12, COLD_40, HORIZONTAL_ALIGNMENT_RIGHT, 130)
 	var frame := Rect2(64, 82, 820, 522)
-	_draw_panel(frame, Color("#171e1b"), Color("#46534d"), 7.0, 1.0)
+	_draw_panel(frame, INK, MUTED, 7.0, 1.0)
 	var phase := _live_replay_phase()
 	if phase == "client_signed":
 		_draw_live_replay_signed(frame)
 	else:
 		_draw_live_replay_video(frame, phase)
 	var notes := Rect2(914, 82, 302, 522)
-	_draw_panel(notes, Color("#f2f3ef"), Color("#a9b1ab"), 7.0, 1.0)
+	_draw_panel(notes, COLD_05, COLD_30, 7.0, 1.0)
 	_draw_text("回放记录", notes.position + Vector2(22, 32), 11, MUTED)
 	var copy: Array[String]
 	match phase:
@@ -3711,17 +3813,17 @@ func _draw_live_replay() -> void:
 	else:
 		var hold_label := "播放中" if phase in ["playback", "replay"] else ("停在这里" if phase == "we_pause" else "请稍候")
 		var hold_button := _live_replay_continue_rect()
-		_draw_panel(hold_button, Color("#dfe3df"), Color("#b9c0bb"), 7.0, 1.0)
-		_draw_text_centered(hold_label, hold_button, 11, Color("#6f7d76"), 3.0)
+		_draw_panel(hold_button, COLD_10, COLD_30, 7.0, 1.0)
+		_draw_text_centered(hold_label, hold_button, 11, COLD_50, 3.0)
 
 
 func _draw_live_replay_signed(frame: Rect2) -> void:
 	var file_card := Rect2(frame.position + Vector2(118, 94), Vector2(584, 302))
-	_draw_paper_card(file_card, Color(0.94, 0.96, 0.945, 0.98), Color("#99a49d"), 8.0, 5.0)
+	_draw_paper_card(file_card, Color(0.94, 0.96, 0.945, 0.98), COLD_40, 8.0, 5.0)
 	var thumbnail := Rect2(file_card.position + Vector2(26, 28), Vector2(156, 112))
 	_draw_texture_cover(art_meeting_replay, thumbnail, Color(0.68, 0.75, 0.76, 1.0), Vector2(0.48, 0.48))
 	draw_rect(thumbnail, Color(0.01, 0.04, 0.05, 0.40))
-	draw_colored_polygon(PackedVector2Array([file_card.position + Vector2(86, 58), file_card.position + Vector2(86, 112), file_card.position + Vector2(132, 85)]), Color("#8aaf96"))
+	draw_colored_polygon(PackedVector2Array([file_card.position + Vector2(86, 58), file_card.position + Vector2(86, 112), file_card.position + Vector2(132, 85)]), GREEN_BRIGHT)
 	_draw_display_text("meeting_B_1942.mp4", file_card.position + Vector2(214, 70), 20, INK)
 	_draw_text("48:11 · 内部录像 · 自动归档", file_card.position + Vector2(214, 104), 11, MUTED)
 	var transition_copy := _live_replay_file_transition_copy()
@@ -3873,12 +3975,12 @@ func _advance_layoff_social() -> void:
 
 
 func _draw_layoff_social() -> void:
-	draw_rect(Rect2(Vector2.ZERO, VIEW), Color("#e7e8e4"))
+	draw_rect(Rect2(Vector2.ZERO, VIEW), COLD_10)
 	_draw_text("周三 / 15:00", Vector2(54, 48), 12, MUTED)
 	_draw_display_text("你没有去公司。", Vector2(54, 92), 30, INK)
 	var process := Rect2(54, 128, 560, 494)
-	_draw_panel(process, Color("#141a18"), Color("#46534d"), 8.0, 1.0)
-	_draw_text("LANTERN / 通知流程", process.position + Vector2(24, 32), 11, Color("#81968a"))
+	_draw_panel(process, COLD_95, MUTED, 8.0, 1.0)
+	_draw_text("LANTERN / 通知流程", process.position + Vector2(24, 32), 11, COLD_40)
 	var phase := _layoff_social_phase()
 	var process_lines := _layoff_social_process_lines()
 	var process_reveal_time := screen_time if phase == "process_complete" and not reduced_motion else LAYOFF_SOCIAL_PROCESS_MIN_SECONDS
@@ -3886,11 +3988,11 @@ func _draw_layoff_social() -> void:
 		var reveal_alpha := clampf((process_reveal_time - float(i) * 0.12) / 0.26, 0.0, 1.0)
 		_draw_text(process_lines[i], process.position + Vector2(24, 76 + i * 41), 13, Color(0.64, 0.78, 0.68, reveal_alpha))
 	var phone := Rect2(704, 88, 414, 554)
-	_draw_panel(phone, Color("#f7f7f3"), Color("#7e8983"), 22.0, 2.0)
-	draw_rect(Rect2(phone.position + Vector2(148, 16), Vector2(118, 7)), Color("#bbc1bd"))
+	_draw_panel(phone, COLD_00, COLD_50, 22.0, 2.0)
+	draw_rect(Rect2(phone.position + Vector2(148, 16), Vector2(118, 7)), COLD_30)
 	_draw_text("动态", phone.position + Vector2(24, 58), 12, MUTED)
 	if phase == "process_complete":
-		_draw_text_centered("15:00", Rect2(phone.position + Vector2(90, 190), Vector2(234, 54)), 36, Color("#353b38"), 3.0)
+		_draw_text_centered("15:00", Rect2(phone.position + Vector2(90, 190), Vector2(234, 54)), 36, COLD_80, 3.0)
 		_draw_text_centered("手机亮了一次。", Rect2(phone.position + Vector2(70, 260), Vector2(274, 38)), 13, MUTED, 3.0)
 	else:
 		_draw_layoff_post(phone, phase)
@@ -3907,17 +4009,17 @@ func _draw_layoff_social() -> void:
 		label = label.replace("ENTER", _gamepad_shortcut("A", "ENTER"))
 		_draw_text_centered(label, button, 12, Color.WHITE, 3.0)
 	else:
-		_draw_panel(button, Color("#dfe3df"), Color("#b9c0bb"), 7.0, 1.0)
-		_draw_text_centered("请稍候", button, 11, Color("#717b75"), 3.0)
+		_draw_panel(button, COLD_10, COLD_30, 7.0, 1.0)
+		_draw_text_centered("请稍候", button, 11, COLD_50, 3.0)
 
 
 func _draw_layoff_post(phone: Rect2, phase: String) -> void:
 	var avatar := phone.position + Vector2(54, 105)
-	draw_circle(avatar, 22.0, Color("#ccd3ce"))
+	draw_circle(avatar, 22.0, COLD_20)
 	_draw_text("前同事", phone.position + Vector2(90, 101), 12, INK)
 	_draw_text("刚刚", phone.position + Vector2(90, 123), 10, MUTED)
 	_draw_paragraph_array(["谢谢老板亲自跟我说。", "挺好的，真的。"], Rect2(phone.position + Vector2(32, 162), Vector2(phone.size.x - 64, 130)), 17, INK, 31)
-	draw_line(phone.position + Vector2(32, 314), phone.position + Vector2(phone.size.x - 32, 314), Color("#d8dcd8"), 1.0)
+	draw_line(phone.position + Vector2(32, 314), phone.position + Vector2(phone.size.x - 32, 314), COLD_10, 1.0)
 	var heart_state := _layoff_social_heart_visual_state(phase, screen_time)
 	var liked := bool(heart_state["filled"])
 	var heart_center := phone.position + Vector2(72, 356)
@@ -3982,12 +4084,12 @@ func _draw_terminal() -> void:
 	var rect := Rect2(306, 106, 912, 520)
 	var inner := rect.grow(-18.0)
 	draw_rect(Rect2(rect.position + Vector2(7, 9), rect.size), Color(0.005, 0.02, 0.025, 0.32))
-	draw_rect(rect, Color("#0d1818"))
-	draw_rect(rect, Color("#536a69"), false, 1.0)
+	draw_rect(rect, COLD_95)
+	draw_rect(rect, COLD_60, false, 1.0)
 	draw_rect(Rect2(rect.position + Vector2(1, 1), Vector2(6, rect.size.y - 2)), BLUE.darkened(0.12))
-	draw_rect(Rect2(inner.position, Vector2(inner.size.x, 38)), Color("#152422"))
-	draw_line(inner.position + Vector2(0, 38), Vector2(inner.end.x, inner.position.y + 38), Color("#405350"), 1.0)
-	_draw_text("OPERATING LEDGER  /  WEEK %02d" % int(model.total_week), inner.position + Vector2(14, 25), 11, Color("#8fb0a7"))
+	draw_rect(Rect2(inner.position, Vector2(inner.size.x, 38)), INK)
+	draw_line(inner.position + Vector2(0, 38), Vector2(inner.end.x, inner.position.y + 38), MUTED, 1.0)
+	_draw_text("OPERATING LEDGER  /  WEEK %02d" % int(model.total_week), inner.position + Vector2(14, 25), 11, COLD_30)
 	_draw_text("NODE %s  ·  CLOSE %02d" % [_model_official_name(), int(model.total_week)], inner.position + Vector2(inner.size.x - 310, 25), 11, NIGHT_MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 296)
 	var live_alpha := 0.72 if reduced_motion else 0.52 + sin(_motion_clock() * 2.2) * 0.16
 	draw_circle(inner.position + Vector2(inner.size.x - 8, 19), 3.0, Color(GREEN_BRIGHT, live_alpha))
@@ -4004,11 +4106,11 @@ func _draw_terminal() -> void:
 	_draw_operating_metric(Vector2(inner.position.x + metric_width * 3.0, metrics_top), metric_width, "跑道", "自给" if runway >= 999 else "%d 周" % runway, "按当前净 burn", GREEN if runway > 12 else AMBER)
 	_draw_operating_metric(Vector2(inner.position.x + metric_width * 4.0, metrics_top), metric_width, "创始人持股", "%.1f%%" % (float(founder_bp) / 100.0), "FULLY DILUTED", GREEN)
 	var register_rule_y := metrics_top + 77.0
-	draw_line(Vector2(inner.position.x, register_rule_y), Vector2(inner.end.x, register_rule_y), Color("#4b605c"), 1.0)
+	draw_line(Vector2(inner.position.x, register_rule_y), Vector2(inner.end.x, register_rule_y), MUTED, 1.0)
 
 	var body_top := register_rule_y + 11.0
 	var split_x := inner.position.x + 548.0
-	draw_line(Vector2(split_x, body_top), Vector2(split_x, inner.end.y - 93.0), Color("#3c504c"), 1.0)
+	draw_line(Vector2(split_x, body_top), Vector2(split_x, inner.end.y - 93.0), COLD_70, 1.0)
 	_draw_operating_company_register(Rect2(inner.position.x, body_top, 532, 208), operations, ledger)
 	_draw_operating_external_register(Rect2(split_x + 16, body_top, inner.end.x - split_x - 16, 208), market, policy)
 
@@ -4017,25 +4119,25 @@ func _draw_terminal() -> void:
 	# chronology, without turning either into a notification card.
 	var tape := Rect2(inner.position.x, inner.end.y - 82.0, inner.size.x, 82.0)
 	draw_rect(tape, Color(0.18, 0.30, 0.28, 0.12))
-	draw_line(tape.position, Vector2(tape.end.x, tape.position.y), Color("#536964"), 1.0)
-	_draw_text("PUBLIC TAPE / 市场与公司回执", tape.position + Vector2(12, 20), 11, Color("#829f98"))
+	draw_line(tape.position, Vector2(tape.end.x, tape.position.y), COLD_60, 1.0)
+	_draw_text("PUBLIC TAPE / 市场与公司回执", tape.position + Vector2(12, 20), 11, COLD_40)
 	var market_line := _operating_latest_public_line(market, policy)
 	_draw_text(_truncate_operating_text(market_line, 48), tape.position + Vector2(12, 43), 12, TERMINAL_TEXT, HORIZONTAL_ALIGNMENT_LEFT, 520)
 	var internal_line := _operating_latest_internal_line()
 	# A fixed quiet zone belongs to the machine cursor.  Long named-candidate
 	# receipts are abbreviated before that zone instead of painting underneath it.
-	_draw_text(_truncate_operating_text(internal_line, 20), tape.position + Vector2(568, 43), 12, Color("#a8c4bc"), HORIZONTAL_ALIGNMENT_LEFT, 250)
-	_draw_text("MARKET", tape.position + Vector2(12, 65), 10, Color("#607c75"))
-	_draw_text("INTERNAL / AUTHOR", tape.position + Vector2(568, 65), 10, Color("#607c75"))
+	_draw_text(_truncate_operating_text(internal_line, 20), tape.position + Vector2(568, 43), 12, COLD_30, HORIZONTAL_ALIGNMENT_LEFT, 250)
+	_draw_text("MARKET", tape.position + Vector2(12, 65), 10, COLD_50)
+	_draw_text("INTERNAL / AUTHOR", tape.position + Vector2(568, 65), 10, COLD_50)
 	if reduced_motion or fmod(_motion_clock(), 1.0) < 0.56:
-		draw_rect(Rect2(tape.position + Vector2(tape.size.x - 14.0, 30), Vector2(7, 13)), Color("#91b2a5"))
+		draw_rect(Rect2(tape.position + Vector2(tape.size.x - 14.0, 30), Vector2(7, 13)), COLD_30)
 	_draw_back_button()
 
 
 func _draw_operating_metric(origin: Vector2, width: float, label: String, value: String, detail: String, accent: Color) -> void:
 	draw_rect(Rect2(origin + Vector2(11, 0), Vector2(3, 55)), Color(accent, 0.64))
 	_draw_text(label, origin + Vector2(24, 15), 11, NIGHT_MUTED)
-	_draw_display_text(value, origin + Vector2(24, 42), 20, Color("#d7e4df"))
+	_draw_display_text(value, origin + Vector2(24, 42), 20, COLD_10)
 	_draw_text(detail, origin + Vector2(24, 61), 10, Color(accent, 0.88), HORIZONTAL_ALIGNMENT_LEFT, width - 32.0)
 
 
@@ -4053,12 +4155,12 @@ func _draw_operating_company_register(rect: Rect2, operations: Dictionary, ledge
 		var step: Dictionary = funnel[i]
 		var x := funnel_x + i * 100.0
 		if i > 0:
-			draw_line(Vector2(x - 48, rect.position.y + 36), Vector2(x - 13, rect.position.y + 36), Color("#405852"), 1.0)
-		draw_circle(Vector2(x, rect.position.y + 36), 11.0, Color("#1a2c29"))
-		draw_arc(Vector2(x, rect.position.y + 36), 11.0, 0.0, TAU, 24, GREEN if int(step["value"]) > 0 else Color("#50645f"), 1.0, true)
-		_draw_text("%02d" % int(step["value"]), Vector2(x - 8, rect.position.y + 40), 11, Color("#d0dfda"))
-		_draw_text(str(step["label"]), Vector2(x - 20, rect.position.y + 60), 10, Color("#748d86"), HORIZONTAL_ALIGNMENT_CENTER, 42)
-	draw_line(rect.position + Vector2(0, 70), rect.position + Vector2(rect.size.x, 70), Color("#354944"), 1.0)
+			draw_line(Vector2(x - 48, rect.position.y + 36), Vector2(x - 13, rect.position.y + 36), MUTED, 1.0)
+		draw_circle(Vector2(x, rect.position.y + 36), 11.0, INK)
+		draw_arc(Vector2(x, rect.position.y + 36), 11.0, 0.0, TAU, 24, GREEN if int(step["value"]) > 0 else COLD_60, 1.0, true)
+		_draw_text("%02d" % int(step["value"]), Vector2(x - 8, rect.position.y + 40), 11, COLD_20)
+		_draw_text(str(step["label"]), Vector2(x - 20, rect.position.y + 60), 10, COLD_50, HORIZONTAL_ALIGNMENT_CENTER, 42)
+	draw_line(rect.position + Vector2(0, 70), rect.position + Vector2(rect.size.x, 70), COLD_70, 1.0)
 
 	var office: Dictionary = Dictionary(operations.get("office", {}))
 	var lease: Dictionary = Dictionary(office.get("lease", {}))
@@ -4067,10 +4169,10 @@ func _draw_operating_company_register(rect: Rect2, operations: Dictionary, ledge
 	var office_overflow := occupancy > capacity
 	var office_name := str(lease.get("name", "尚未签约·分布式"))
 	_draw_text("办公室", rect.position + Vector2(0, 94), 11, NIGHT_MUTED)
-	_draw_text(_truncate_operating_text(office_name, 16), rect.position + Vector2(74, 94), 12, Color("#c4d5cf"))
+	_draw_text(_truncate_operating_text(office_name, 16), rect.position + Vector2(74, 94), 12, COLD_20)
 	_draw_text("%d 人 / %d 工位" % [occupancy, capacity], rect.position + Vector2(400, 94), 11, RED if office_overflow else GREEN_BRIGHT, HORIZONTAL_ALIGNMENT_RIGHT, 130)
 	var office_bar := Rect2(rect.position + Vector2(74, 103), Vector2(456, 3))
-	draw_rect(office_bar, Color("#273a36"))
+	draw_rect(office_bar, COLD_80)
 	var office_denominator := maxi(1, maxi(capacity, occupancy))
 	draw_rect(Rect2(office_bar.position, Vector2(office_bar.size.x * clampf(float(occupancy) / float(office_denominator), 0.0, 1.0), office_bar.size.y)), RED if office_overflow else GREEN)
 
@@ -4089,22 +4191,22 @@ func _draw_operating_company_register(rect: Rect2, operations: Dictionary, ledge
 	for i in cost_columns.size():
 		var cost: Dictionary = cost_columns[i]
 		var x := rect.position.x + 74.0 + i * 113.0
-		_draw_text(str(cost["label"]), Vector2(x, rect.position.y + 130), 10, Color("#718a83"))
-		_draw_text(_format_usd_compact(int(cost["value"])), Vector2(x, rect.position.y + 151), 12, Color("#c4d5cf"))
+		_draw_text(str(cost["label"]), Vector2(x, rect.position.y + 130), 10, COLD_50)
+		_draw_text(_format_usd_compact(int(cost["value"])), Vector2(x, rect.position.y + 151), 12, COLD_20)
 
-	draw_line(rect.position + Vector2(0, 161), rect.position + Vector2(rect.size.x, 161), Color("#354944"), 1.0)
+	draw_line(rect.position + Vector2(0, 161), rect.position + Vector2(rect.size.x, 161), COLD_70, 1.0)
 	_draw_text("采购 / 续约", rect.position + Vector2(0, 185), 11, NIGHT_MUTED)
 	var subscriptions: Array = Array(operations.get("subscriptions", []))
 	if subscriptions.is_empty():
-		_draw_text("采购台账尚空", rect.position + Vector2(88, 185), 11, Color("#71857f"))
+		_draw_text("采购台账尚空", rect.position + Vector2(88, 185), 11, COLD_50)
 	else:
 		for i in mini(2, subscriptions.size()):
 			var subscription: Dictionary = Dictionary(subscriptions[i])
 			var x := rect.position.x + 88.0 + i * 220.0
 			var renewal := int(subscription.get("renewal_week", -1))
 			var service_meta := "%s/w · W%02d" % [_format_usd_compact(_operating_cost_to_usd(float(subscription.get("weekly_cost", 0.0)))), renewal]
-			_draw_text(_truncate_operating_text(str(subscription.get("name", "SERVICE")), 9), Vector2(x, rect.position.y + 181), 11, Color("#bed0ca"))
-			_draw_text(service_meta, Vector2(x, rect.position.y + 199), 10, Color("#6f8b83"))
+			_draw_text(_truncate_operating_text(str(subscription.get("name", "SERVICE")), 9), Vector2(x, rect.position.y + 181), 11, COLD_20)
+			_draw_text(service_meta, Vector2(x, rect.position.y + 199), 10, COLD_50)
 
 
 func _draw_operating_external_register(rect: Rect2, market: Dictionary, policy: Dictionary) -> void:
@@ -4115,16 +4217,16 @@ func _draw_operating_external_register(rect: Rect2, market: Dictionary, policy: 
 		var y := rect.position.y + 35.0 + i * 39.0
 		var signal_label := _operating_signal_label(str(competitor.get("public_product_signal", "unknown")))
 		draw_circle(Vector2(rect.position.x + 4, y - 3), 2.5, BLUE if i != 1 else AMBER)
-		_draw_text(_truncate_operating_text(str(competitor.get("name", "COMPETITOR")), 16), Vector2(rect.position.x + 14, y), 12, Color("#c9d8d4"))
-		_draw_text("%s · %s" % [_operating_stage_label(str(competitor.get("stage", ""))), _operating_strategy_label(str(competitor.get("last_strategy", "")))], Vector2(rect.position.x + 14, y + 17), 10, Color("#718983"))
-		_draw_text(signal_label, Vector2(rect.end.x - 74, y), 10, Color("#89a9a0"), HORIZONTAL_ALIGNMENT_RIGHT, 72)
+		_draw_text(_truncate_operating_text(str(competitor.get("name", "COMPETITOR")), 16), Vector2(rect.position.x + 14, y), 12, COLD_20)
+		_draw_text("%s · %s" % [_operating_stage_label(str(competitor.get("stage", ""))), _operating_strategy_label(str(competitor.get("last_strategy", "")))], Vector2(rect.position.x + 14, y + 17), 10, COLD_50)
+		_draw_text(signal_label, Vector2(rect.end.x - 74, y), 10, COLD_40, HORIZONTAL_ALIGNMENT_RIGHT, 72)
 		if i < mini(3, competitors.size()) - 1:
 			draw_line(Vector2(rect.position.x + 14, y + 23), Vector2(rect.end.x, y + 23), Color(0.26, 0.37, 0.34, 0.42), 1.0)
 	if competitors.is_empty():
-		_draw_text("尚无公开竞争信号", rect.position + Vector2(0, 46), 11, Color("#71857f"))
+		_draw_text("尚无公开竞争信号", rect.position + Vector2(0, 46), 11, COLD_50)
 
 	var policy_y := rect.position.y + 158.0
-	draw_line(Vector2(rect.position.x, policy_y - 17), Vector2(rect.end.x, policy_y - 17), Color("#3d514d"), 1.0)
+	draw_line(Vector2(rect.position.x, policy_y - 17), Vector2(rect.end.x, policy_y - 17), MUTED, 1.0)
 	_draw_text("POLICY DESK / 政策", Vector2(rect.position.x, policy_y), 11, BLUE.lightened(0.24))
 	var policy_values := [
 		{"label": "准入", "value": int(policy.get("access", 0))},
@@ -4134,10 +4236,10 @@ func _draw_operating_external_register(rect: Rect2, market: Dictionary, policy: 
 	for i in policy_values.size():
 		var entry: Dictionary = policy_values[i]
 		var x := rect.position.x + i * 91.0
-		_draw_text(str(entry["label"]), Vector2(x, policy_y + 24), 10, Color("#718983"))
-		_draw_text("%02d" % int(entry["value"]), Vector2(x + 34, policy_y + 24), 11, Color("#c8d8d3"))
+		_draw_text(str(entry["label"]), Vector2(x, policy_y + 24), 10, COLD_50)
+		_draw_text("%02d" % int(entry["value"]), Vector2(x + 34, policy_y + 24), 11, COLD_20)
 		var gauge := Rect2(x, policy_y + 30, 76, 2)
-		draw_rect(gauge, Color("#293b37"))
+		draw_rect(gauge, COLD_80)
 		draw_rect(Rect2(gauge.position, Vector2(gauge.size.x * clampf(float(entry["value"]) / 100.0, 0.0, 1.0), 2)), GREEN)
 	var policy_status: Array[String] = []
 	if bool(policy.get("government_contractor", false)):
@@ -4152,7 +4254,7 @@ func _draw_operating_external_register(rect: Rect2, market: Dictionary, policy: 
 	# facts.  Keep the identities on the first line and give a third status (most
 	# often the tax-credit balance) an unabridged second line.
 	var policy_first_line := " / ".join(policy_status.slice(0, mini(2, policy_status.size())))
-	_draw_text(policy_first_line, Vector2(rect.position.x, policy_y + 52), 10, Color("#86a39b"), HORIZONTAL_ALIGNMENT_LEFT, rect.size.x)
+	_draw_text(policy_first_line, Vector2(rect.position.x, policy_y + 52), 10, COLD_40, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x)
 	if policy_status.size() > 2:
 		var policy_second_line := " / ".join(policy_status.slice(2))
 		_draw_text(policy_second_line, Vector2(rect.position.x, policy_y + 69), 10, GREEN_BRIGHT, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x)
@@ -4252,15 +4354,15 @@ func _draw_intranet() -> void:
 	if not docs.is_empty():
 		var paper_document: Dictionary = docs[clampi(selected_document, 0, docs.size() - 1)]
 		detail_machine_authored = str(paper_document.get("author", "")).to_upper().contains("LANTERN")
-	var detail_paper := Color("#e6ece7") if detail_machine_authored else Color("#f1e8d5")
+	var detail_paper := COLD_10 if detail_machine_authored else WARM_10
 	draw_rect(Rect2(index_page.position + Vector2(6, 7), Vector2(detail.end.x - index_page.position.x, index_page.size.y)), Color(0.01, 0.035, 0.04, 0.16))
-	draw_rect(index_page, Color("#e6ebe5"))
+	draw_rect(index_page, COLD_10)
 	draw_rect(detail, detail_paper)
-	draw_line(index_page.position, Vector2(detail.end.x, index_page.position.y), Color("#7e8b86"), 1.0)
-	draw_line(Vector2(index_page.position.x, index_page.end.y), Vector2(detail.end.x, index_page.end.y), Color("#9da59f"), 1.0)
-	draw_line(Vector2(536, 170), Vector2(536, 626), Color("#7f8d88"), 2.0)
+	draw_line(index_page.position, Vector2(detail.end.x, index_page.position.y), COLD_40, 1.0)
+	draw_line(Vector2(index_page.position.x, index_page.end.y), Vector2(detail.end.x, index_page.end.y), COLD_40, 1.0)
+	draw_line(Vector2(536, 170), Vector2(536, 626), COLD_40, 2.0)
 	_draw_text("卷内目录 / %02d 份" % docs.size(), index_page.position + Vector2(14, 28), TYPE_META, MUTED)
-	draw_line(index_page.position + Vector2(14, 39), index_page.position + Vector2(index_page.size.x - 14, 39), Color("#aeb6b0"), 1.0)
+	draw_line(index_page.position + Vector2(14, 39), index_page.position + Vector2(index_page.size.x - 14, 39), COLD_30, 1.0)
 	for i in docs.size():
 		var doc: Dictionary = docs[i]
 		var hit_rect := _document_rect(i)
@@ -4277,7 +4379,7 @@ func _draw_intranet() -> void:
 		_draw_text("%02d" % (i + 1), row_rect.position + Vector2(12, 23), 10, PAPER_GREEN if i == selected_document else MUTED)
 		_draw_text(str(doc.get("title", "文档")), row_rect.position + Vector2(43, 23), 12, INK, HORIZONTAL_ALIGNMENT_LEFT, 161)
 		_draw_text(_document_meta(doc), row_rect.position + Vector2(43, 44), 10, MUTED, HORIZONTAL_ALIGNMENT_LEFT, 161)
-		draw_line(Vector2(row_rect.position.x + 12, row_rect.end.y), Vector2(row_rect.end.x - 12, row_rect.end.y), Color("#b2b9b2"), 1.0)
+		draw_line(Vector2(row_rect.position.x + 12, row_rect.end.y), Vector2(row_rect.end.x - 12, row_rect.end.y), COLD_30, 1.0)
 	draw_rect(Rect2(detail.position + Vector2(24, 0), Vector2(122, 4)), AMBER)
 	if not docs.is_empty():
 		var selected: Dictionary = docs[clampi(selected_document, 0, docs.size() - 1)]
@@ -4294,12 +4396,12 @@ func _draw_intranet() -> void:
 		var body_height := detail.size.y - 118.0
 		if selected_id == "our_origin" and (_origin_interaction_required() or bool(model.flags.get("origin_article_interaction_complete", false))):
 			body_height -= 60.0
-		draw_line(detail.position + Vector2(28, 90), detail.position + Vector2(detail.size.x - 28, 90), Color("#b9ac97"), 1.0)
+		draw_line(detail.position + Vector2(28, 90), detail.position + Vector2(detail.size.x - 28, 90), WARM_40, 1.0)
 		_draw_paragraph_array(visible_body, Rect2(detail.position + Vector2(28, 104), Vector2(detail.size.x - 56, body_height)), 14, INK, 24)
 		if selected_id == "our_origin" and _origin_interaction_required():
 			var read_count := clampi(int(model.memory.get("origin_read_count", 0)), 0, 3)
 			var reread := _origin_reread_rect()
-			draw_line(detail.position + Vector2(28, 398), detail.position + Vector2(detail.size.x - 28, 398), Color("#b9ac97"), 1.0)
+			draw_line(detail.position + Vector2(28, 398), detail.position + Vector2(detail.size.x - 28, 398), WARM_40, 1.0)
 			_draw_text("阅读记录  %d / 3" % read_count, detail.position + Vector2(28, 426), TYPE_META, GREEN)
 			_draw_ledger_button(reread, "再读一遍", _gamepad_shortcut("A", "ENTER"), "quiet")
 		elif selected_id == "our_origin" and bool(model.flags.get("origin_article_interaction_complete", false)):
@@ -4315,17 +4417,17 @@ func _draw_calendar() -> void:
 	var days := ["周一", "周二", "周三", "周四", "周五"]
 	var planner := Rect2(306, 164, 660, 356)
 	draw_rect(Rect2(planner.position + Vector2(5, 6), planner.size), Color(0.01, 0.035, 0.04, 0.14))
-	draw_rect(planner, Color("#e9ede6"))
-	draw_rect(planner, Color("#89958f"), false, 1.0)
+	draw_rect(planner, COLD_05)
+	draw_rect(planner, COLD_40, false, 1.0)
 	for i in days.size():
 		var day_reveal := _reveal(0.04 + i * 0.04, 0.32)
 		var day_rect := Rect2(area.position.x + i * 132.0, 164 + (1.0 - day_reveal) * 8.0, 132, 356)
 		if i > 0:
-			draw_line(Vector2(day_rect.position.x, planner.position.y), Vector2(day_rect.position.x, planner.end.y), Color("#a8b0aa"), 1.0)
+			draw_line(Vector2(day_rect.position.x, planner.position.y), Vector2(day_rect.position.x, planner.end.y), COLD_30, 1.0)
 		draw_rect(Rect2(day_rect.position, Vector2(day_rect.size.x, 4)), BLUE.lerp(GREEN, float(i) / 4.0))
 		_draw_text("0%d" % (i + 1), day_rect.position + Vector2(12, 28), 10, PAPER_GREEN)
 		_draw_text(days[i], day_rect.position + Vector2(43, 28), 12, INK)
-		draw_line(day_rect.position + Vector2(10, 39), day_rect.position + Vector2(day_rect.size.x - 10, 39), Color("#9ea8a1"), 1.0)
+		draw_line(day_rect.position + Vector2(10, 39), day_rect.position + Vector2(day_rect.size.x - 10, 39), COLD_30, 1.0)
 		for guide in 4:
 			var guide_y := day_rect.position.y + 116 + guide * 58
 			draw_line(Vector2(day_rect.position.x + 10, guide_y), Vector2(day_rect.end.x - 10, guide_y), Color(0.48, 0.57, 0.58, 0.13), 1.0)
@@ -4333,17 +4435,17 @@ func _draw_calendar() -> void:
 		for row in entries.size():
 			var entry: Dictionary = entries[row]
 			var entry_rect := Rect2(day_rect.position + Vector2(10, 52 + row * 82), Vector2(day_rect.size.x - 20, 66))
-			draw_rect(entry_rect, Color("#f2ead6"))
+			draw_rect(entry_rect, WARM_10)
 			draw_rect(Rect2(entry_rect.position, Vector2(3, entry_rect.size.y)), BLUE.lerp(GREEN, float(i) / 4.0))
 			_draw_text(str(entry.get("time", "")), entry_rect.position + Vector2(9, 18), 10, PAPER_GREEN)
 			_draw_multiline(str(entry.get("title", "")), Rect2(entry_rect.position + Vector2(9, 24), Vector2(entry_rect.size.x - 17, 38)), 12, INK, 17)
 	var resource := Rect2(976 + (1.0 - _reveal(0.18, 0.36)) * 12.0, 164, 268, 356)
 	draw_rect(Rect2(resource.position + Vector2(5, 6), resource.size), Color(0.01, 0.035, 0.04, 0.14))
-	draw_rect(resource, Color("#e6ebe5"))
-	draw_rect(resource, Color("#89958f"), false, 1.0)
+	draw_rect(resource, COLD_10)
+	draw_rect(resource, COLD_40, false, 1.0)
 	_draw_text("会议室与门禁登记", resource.position + Vector2(18, 24), TYPE_META, PAPER_GREEN)
 	_draw_text("会议室", resource.position + Vector2(18, 44), 12, INK)
-	draw_line(resource.position + Vector2(18, 53), resource.position + Vector2(resource.size.x - 18, 53), Color("#a4ada7"), 1.0)
+	draw_line(resource.position + Vector2(18, 53), resource.position + Vector2(resource.size.x - 18, 53), COLD_30, 1.0)
 	var rooms := ["A · 空闲", "B · 14:00 客户", "C · 09:00–11:00"]
 	if bool(model.flags.get("meeting_room_d_available", false)):
 		rooms.append("D · 下周同一时间")
@@ -4351,7 +4453,7 @@ func _draw_calendar() -> void:
 		var room_rect := Rect2(resource.position + Vector2(18, 58 + i * 43), Vector2(resource.size.x - 36, 38))
 		_draw_text("%02d" % (i + 1), room_rect.position + Vector2(0, 24), 10, MUTED)
 		_draw_text(str(rooms[i]), room_rect.position + Vector2(34, 24), 11, INK)
-		draw_line(Vector2(room_rect.position.x, room_rect.end.y), Vector2(room_rect.end.x, room_rect.end.y), Color("#b4bbb5"), 1.0)
+		draw_line(Vector2(room_rect.position.x, room_rect.end.y), Vector2(room_rect.end.x, room_rect.end.y), COLD_30, 1.0)
 	_draw_text("电梯权限", resource.position + Vector2(18, 262), 11, MUTED)
 	var floors := ["L", "1"]
 	if bool(model.flags.get("extra_elevator_floor", false)):
@@ -4380,12 +4482,12 @@ func _draw_announcements() -> void:
 	var visible_items := items.slice(page_start, mini(items.size(), page_start + page_size))
 	var queue_sheet := Rect2(306, 164, 684, 450)
 	draw_rect(Rect2(queue_sheet.position + Vector2(5, 6), queue_sheet.size), Color(0.01, 0.035, 0.04, 0.14))
-	draw_rect(queue_sheet, Color("#e9ede7"))
-	draw_rect(queue_sheet, Color("#89958f"), false, 1.0)
+	draw_rect(queue_sheet, COLD_05)
+	draw_rect(queue_sheet, COLD_40, false, 1.0)
 	_draw_text("序号", queue_sheet.position + Vector2(16, 28), TYPE_META, MUTED)
 	_draw_text("主题 / 发布范围", queue_sheet.position + Vector2(62, 28), TYPE_META, MUTED)
 	_draw_text("信号", queue_sheet.position + Vector2(506, 28), TYPE_META, MUTED)
-	draw_line(queue_sheet.position + Vector2(14, 39), queue_sheet.position + Vector2(queue_sheet.size.x - 14, 39), Color("#9fa8a1"), 1.0)
+	draw_line(queue_sheet.position + Vector2(14, 39), queue_sheet.position + Vector2(queue_sheet.size.x - 14, 39), COLD_30, 1.0)
 	for i in visible_items.size():
 		var item: Dictionary = visible_items[i]
 		var item_reveal := _reveal(0.04 + i * 0.04, 0.30)
@@ -4396,22 +4498,22 @@ func _draw_announcements() -> void:
 		_draw_text(str(item.get("title", "内部更新")), rect.position + Vector2(62, 25), 13, INK, HORIZONTAL_ALIGNMENT_LEFT, 408)
 		_draw_text(str(item.get("meta", "全员 · 本周")), rect.position + Vector2(62, 47), 10, MUTED, HORIZONTAL_ALIGNMENT_LEFT, 408)
 		_draw_text(str(item.get("metric", "")), rect.position + Vector2(490, 34), 12, PAPER_GREEN, HORIZONTAL_ALIGNMENT_RIGHT, 172)
-		draw_line(Vector2(queue_sheet.position.x + 14, rect.end.y), Vector2(queue_sheet.end.x - 14, rect.end.y), Color("#b3bab4"), 1.0)
+		draw_line(Vector2(queue_sheet.position.x + 14, rect.end.y), Vector2(queue_sheet.end.x - 14, rect.end.y), COLD_30, 1.0)
 	if _announcement_page_count() > 1:
 		_draw_page_button(_announcement_prev_rect(), "‹", announcement_page > 0)
 		_draw_page_counter(_announcement_page_counter_rect(), announcement_page + 1, _announcement_page_count())
 		_draw_page_button(_announcement_next_rect(), "›", announcement_page + 1 < _announcement_page_count())
 	var side := Rect2(1012 + (1.0 - _reveal(0.16, 0.36)) * 12.0, 164, 232, 250)
 	draw_rect(Rect2(side.position + Vector2(5, 6), side.size), Color(0.01, 0.035, 0.04, 0.14))
-	draw_rect(side, Color("#e6ebe5"))
-	draw_rect(side, Color("#89958f"), false, 1.0)
+	draw_rect(side, COLD_10)
+	draw_rect(side, COLD_40, false, 1.0)
 	draw_rect(Rect2(side.position, Vector2(side.size.x, 4)), GREEN)
 	_draw_text("招聘页回执", side.position + Vector2(18, 27), TYPE_META, MUTED)
-	draw_line(side.position + Vector2(18, 38), side.position + Vector2(side.size.x - 18, 38), Color("#a5aea8"), 1.0)
+	draw_line(side.position + Vector2(18, 38), side.position + Vector2(side.size.x - 18, 38), COLD_30, 1.0)
 	announcement_sidebar_snapshot = _announcement_sidebar_metrics()
 	_draw_display_text(str(announcement_sidebar_snapshot.get("views", "—")), side.position + Vector2(18, 86), 32, INK)
 	_draw_text("本周浏览", side.position + Vector2(18, 108), 10, MUTED)
-	draw_line(side.position + Vector2(18, 126), side.position + Vector2(side.size.x - 18, 126), Color("#b4bbb5"), 1.0)
+	draw_line(side.position + Vector2(18, 126), side.position + Vector2(side.size.x - 18, 126), COLD_30, 1.0)
 	_draw_display_text(str(announcement_sidebar_snapshot.get("applications", "—")), side.position + Vector2(18, 169), 28, PAPER_GREEN)
 	_draw_text("收到简历", side.position + Vector2(18, 191), 10, MUTED)
 	_draw_text("页面状态 / 正在招人", side.position + Vector2(18, 229), 10, MUTED)
@@ -4420,17 +4522,17 @@ func _draw_announcements() -> void:
 
 func _draw_second_time_event() -> void:
 	var fade := 1.0 if reduced_motion else clampf(screen_time / 0.30, 0.0, 1.0)
-	draw_rect(Rect2(Vector2.ZERO, VIEW), Color("#111816"))
+	draw_rect(Rect2(Vector2.ZERO, VIEW), COLD_95)
 	for i in 18:
 		var x := 34.0 + float((i * 97) % 1180)
 		var y := 78.0 + float((i * 53) % 560)
 		draw_circle(Vector2(x, y), 1.1, Color(0.55, 0.70, 0.60, 0.10))
 	var panel := Rect2(88, 58, 1104, 604)
 	draw_rect(Rect2(panel.position + Vector2(9, 11), panel.size), Color(0.0, 0.02, 0.025, 0.32 * fade))
-	draw_rect(panel, Color("#f0ecdf"))
-	draw_rect(panel, Color("#66776e"), false, 1.0)
+	draw_rect(panel, WARM_05)
+	draw_rect(panel, COLD_50, false, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(7, panel.size.y)), GREEN)
-	draw_rect(Rect2(panel.position + Vector2(510, -5), Vector2(86, 12)), Color("#929d96"))
+	draw_rect(Rect2(panel.position + Vector2(510, -5), Vector2(86, 12)), COLD_40)
 	_draw_text("LANTERN / NEW GAME+", panel.position + Vector2(34, 35), 11, GREEN)
 	_draw_display_text("第二次", panel.position + Vector2(34, 79), 32, INK)
 	_draw_text("2024 年 3 月 · 公司只有两个人", panel.position + Vector2(190, 77), 12, MUTED)
@@ -4440,9 +4542,9 @@ func _draw_second_time_event() -> void:
 	_draw_texture_cover(art_title, scene, Color(0.80, 0.86, 0.85, 1.0), Vector2(0.54, 0.52))
 	draw_rect(scene, Color(0.015, 0.05, 0.065, 0.30))
 	draw_rect(Rect2(scene.position, Vector2(scene.size.x, 58)), Color(0.02, 0.07, 0.085, 0.78))
-	draw_rect(Rect2(scene.position, Vector2(6, scene.size.y)), Color("#69b7ab"))
-	_draw_text("ARCHIVE / 2024 年 3 月", scene.position + Vector2(24, 27), 10, Color("#d7e6e3"))
-	_draw_text("两个人，两个工位。", scene.position + Vector2(24, 47), 11, Color("#a9c0c1"))
+	draw_rect(Rect2(scene.position, Vector2(6, scene.size.y)), GREEN_BRIGHT)
+	_draw_text("ARCHIVE / 2024 年 3 月", scene.position + Vector2(24, 27), 10, NIGHT_TEXT)
+	_draw_text("两个人，两个工位。", scene.position + Vector2(24, 47), 11, COLD_30)
 	var desk_centers := [
 		scene.position + Vector2(146, 332),
 		scene.position + Vector2(344, 332),
@@ -4453,29 +4555,29 @@ func _draw_second_time_event() -> void:
 	for i in [0, 2]:
 		var desk: Vector2 = desk_centers[i]
 		draw_line(desk + Vector2(-52, 24), desk + Vector2(52, 24), Color(0.74, 0.86, 0.84, 0.30), 1.0)
-		_draw_text_centered("01" if i == 0 else "02", Rect2(desk + Vector2(-18, 31), Vector2(36, 18)), 9, Color("#b5c8c7"), 2.0)
+		_draw_text_centered("01" if i == 0 else "02", Rect2(desk + Vector2(-18, 31), Vector2(36, 18)), 9, COLD_20, 2.0)
 	var phase := _second_time_phase()
 	var cup_position := str(model.memory.get("second_time_cup_position", "founder_desk"))
 	if cup_position == "founder_desk":
-		_draw_cup_icon(desk_centers[0] + Vector2(42, -18), 0.84, Color("#f1eee5"), AMBER)
+		_draw_cup_icon(desk_centers[0] + Vector2(42, -18), 0.84, WARM_05, AMBER)
 	elif cup_position == "window_second_desk":
-		_draw_cup_icon(desk_centers[2] + Vector2(-34, -18), 0.84, Color("#f1eee5"), AMBER)
+		_draw_cup_icon(desk_centers[2] + Vector2(-34, -18), 0.84, WARM_05, AMBER)
 		draw_line(desk_centers[2] + Vector2(-56, 12), desk_centers[2] + Vector2(18, 12), Color(0.88, 0.60, 0.35, 0.76), 1.0)
-		_draw_text("靠窗第二工位", desk_centers[2] + Vector2(-58, 70), 9, Color("#9fd3c9"))
+		_draw_text("靠窗第二工位", desk_centers[2] + Vector2(-58, 70), 9, TERMINAL_TEXT)
 	else:
 		var held_center := scene.position + Vector2(326, 166 + sin(_motion_clock() * 2.2) * 3.0)
 		draw_circle(held_center, 58.0, Color(0.78, 0.52, 0.29, 0.16))
-		_draw_cup_icon(held_center, 1.70, Color("#faf7ed"), AMBER)
-		_draw_text_centered("第一届全员团建 · 2024", Rect2(held_center - Vector2(116, -58), Vector2(232, 24)), 10, Color("#f1e2cd"), 3.0)
+		_draw_cup_icon(held_center, 1.70, WARM_05, AMBER)
+		_draw_text_centered("第一届全员团建 · 2024", Rect2(held_center - Vector2(116, -58), Vector2(232, 24)), 10, WARM_10, 3.0)
 	if phase in [SECOND_TIME_PHASE_QUESTION, SECOND_TIME_PHASE_ANSWERED, SECOND_TIME_PHASE_PLACED]:
 		var lin_rect := Rect2(scene.position + Vector2(500, 126), Vector2(126, 189))
 		draw_texture_rect(art_lin, lin_rect, false, Color(0.86, 0.91, 0.91, 0.96))
 		draw_rect(Rect2(lin_rect.position + Vector2(0, lin_rect.size.y - 27), Vector2(lin_rect.size.x, 27)), Color(0.02, 0.07, 0.085, 0.84))
-		_draw_text("林越 / CTO", lin_rect.position + Vector2(10, lin_rect.size.y - 9), 9, Color("#d9e6e3"))
+		_draw_text("林越 / CTO", lin_rect.position + Vector2(10, lin_rect.size.y - 9), 9, NIGHT_TEXT)
 
 	var copy_rect := Rect2(panel.position + Vector2(724, 116), Vector2(344, 250))
 	_draw_text("交互记录", copy_rect.position, 11, MUTED)
-	draw_line(copy_rect.position + Vector2(0, 13), copy_rect.position + Vector2(copy_rect.size.x, 13), Color("#aaa38f"), 1.0)
+	draw_line(copy_rect.position + Vector2(0, 13), copy_rect.position + Vector2(copy_rect.size.x, 13), WARM_40, 1.0)
 	var phase_index: int = int({
 		SECOND_TIME_PHASE_PRESENT: 1,
 		SECOND_TIME_PHASE_HELD: 2,
@@ -4491,8 +4593,8 @@ func _draw_second_time_event() -> void:
 			var rect := _second_time_choice_rect(i)
 			var choice: Dictionary = choices[i]
 			draw_rect(rect, Color(0.91, 0.91, 0.85, 0.78) if rect.has_point(mouse_position) else Color(0.94, 0.92, 0.84, 0.52))
-			draw_rect(rect, GREEN if rect.has_point(mouse_position) else Color("#aaa995"), false, 1.0)
-			draw_rect(Rect2(rect.position, Vector2(4, rect.size.y)), GREEN if rect.has_point(mouse_position) else Color("#8d988f"))
+			draw_rect(rect, GREEN if rect.has_point(mouse_position) else COLD_30, false, 1.0)
+			draw_rect(Rect2(rect.position, Vector2(4, rect.size.y)), GREEN if rect.has_point(mouse_position) else COLD_40)
 			if _focus_is("event_choices:", i):
 				draw_rect(rect.grow(4.0), GREEN_BRIGHT, false, 2.0)
 			_draw_text("%d" % (i + 1), rect.position + Vector2(16, 28), 11, MUTED)
@@ -4554,7 +4656,7 @@ func _draw_event() -> void:
 	var reveal := _reveal(0.0, 0.32)
 	var panel := Rect2(54, 290 + (1.0 - reveal) * 18.0, 724, 390)
 	_draw_panel(Rect2(panel.position + Vector2(5, 7), panel.size), Color(0.01, 0.035, 0.045, 0.24), Color.TRANSPARENT, 2.0, 0.0)
-	_draw_panel(panel, Color(0.91, 0.86, 0.75, 0.965), Color("#8f9187"), 2.0, 1.0)
+	_draw_panel(panel, Color(0.91, 0.86, 0.75, 0.965), COLD_40, 2.0, 1.0)
 	draw_line(panel.position + Vector2(30, 24), panel.position + Vector2(panel.size.x - 30, 24), Color(0.29, 0.34, 0.32, 0.24), 1.0)
 	_draw_event_scene_header(panel)
 	var pages := _event_body_pages()
@@ -4597,9 +4699,9 @@ func _draw_first_day_prologue() -> void:
 	var top_bar := Rect2(0, 0, VIEW.x, 112)
 	draw_rect(top_bar, Color(0.018, 0.055, 0.072, 0.88))
 	draw_line(Vector2(0, top_bar.end.y), Vector2(VIEW.x, top_bar.end.y), Color(0.38, 0.62, 0.62, 0.44), 1.0)
-	_draw_text("DAY ONE  /  21:47  /  RAIN", Vector2(54, 36), 12, Color("#8fc1bb"))
-	_draw_display_text("第一天", Vector2(52, 82), 34, Color("#edf2ed"))
-	_draw_text("两个人 · 一张显卡 · 十周现金", Vector2(178, 80), 13, Color("#b9cbc8"))
+	_draw_text("DAY ONE  /  21:47  /  RAIN", Vector2(54, 36), 12, TERMINAL_TEXT)
+	_draw_display_text("第一天", Vector2(52, 82), 34, COLD_05)
+	_draw_text("两个人 · 一张显卡 · 十周现金", Vector2(178, 80), 13, COLD_20)
 	var skip_rect := _first_day_skip_rect()
 	_draw_ledger_button(skip_rect, "再次确认跳过" if opening_skip_confirm_pending else "跳过序章", _gamepad_shortcut("B", "K"), "danger" if opening_skip_confirm_pending else "quiet", true)
 
@@ -4609,12 +4711,12 @@ func _draw_first_day_prologue() -> void:
 	var panel_reveal := 1.0 if reduced_motion else _ease_out_cubic(clampf(event_page_elapsed / 0.26, 0.0, 1.0))
 	var panel := Rect2(54, 148 + (1.0 - panel_reveal) * 10.0, 730, 520)
 	_draw_panel(Rect2(panel.position + Vector2(7, 9), panel.size), Color(0.0, 0.02, 0.03, 0.34), Color.TRANSPARENT, 4.0, 0.0)
-	_draw_panel(panel, Color(0.925, 0.925, 0.875, 0.985), Color("#7f918c"), 4.0, 1.0)
+	_draw_panel(panel, Color(0.925, 0.925, 0.875, 0.985), COLD_40, 4.0, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(6, panel.size.y)), GREEN)
 	_draw_text(str(phase.get("speaker", "林越")), panel.position + Vector2(34, 38), 12, PAPER_GREEN)
 	_draw_text("现场 / 不留档的部分", panel.position + Vector2(454, 38), 12, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 238)
 	_draw_display_text(str(phase.get("title", "第一天")), panel.position + Vector2(32, 84), 28, INK)
-	draw_line(panel.position + Vector2(32, 102), panel.position + Vector2(panel.size.x - 32, 102), Color("#9ba7a1"), 1.0)
+	draw_line(panel.position + Vector2(32, 102), panel.position + Vector2(panel.size.x - 32, 102), COLD_40, 1.0)
 	var choices := _first_day_choices()
 	var phase_ready := _first_day_ready()
 	var body_height := 154.0 if not choices.is_empty() else 314.0
@@ -4637,8 +4739,8 @@ func _draw_first_day_prologue() -> void:
 			var hovered := rect.has_point(mouse_position)
 			var focused := _focus_is("opening_choices:", i)
 			draw_rect(rect, Color(0.23, 0.49, 0.45, 0.16 if hovered or focused else 0.055))
-			draw_rect(Rect2(rect.position, Vector2(3, rect.size.y)), GREEN if hovered or focused else Color("#82938d"))
-			draw_line(Vector2(rect.position.x, rect.end.y), rect.end, Color("#a1aaa5"), 1.0)
+			draw_rect(Rect2(rect.position, Vector2(3, rect.size.y)), GREEN if hovered or focused else COLD_40)
+			draw_line(Vector2(rect.position.x, rect.end.y), rect.end, COLD_30, 1.0)
 			if focused:
 				_draw_panel(rect.grow(3.0), Color.TRANSPARENT, GREEN_BRIGHT, 4.0, 2.0)
 			_draw_text("%d" % (i + 1), rect.position + Vector2(16, 30), 12, PAPER_GREEN)
@@ -4647,7 +4749,7 @@ func _draw_first_day_prologue() -> void:
 	_draw_text("FIRST DAY  %02d / %02d" % [phase_index + 1, maxi(1, phases.size())], panel.position + Vector2(34, panel.size.y - 20), 11, MUTED)
 	for tick in phases.size():
 		var tick_rect := Rect2(panel.position + Vector2(182 + tick * 28, panel.size.y - 27), Vector2(18, 3))
-		draw_rect(tick_rect, GREEN if tick <= phase_index else Color("#bcc3be"))
+		draw_rect(tick_rect, GREEN if tick <= phase_index else COLD_30)
 	_draw_first_day_portrait(phase_index)
 
 
@@ -4698,8 +4800,8 @@ func _draw_first_day_portrait(phase_index: int) -> void:
 
 func _draw_first_day_terminal_card(frame: Rect2, phase_index: int) -> void:
 	var card := Rect2(frame.position + Vector2(20, 326), Vector2(frame.size.x - 40, 92))
-	_draw_panel(card, Color(0.018, 0.055, 0.064, 0.94), Color("#55716f"), 3.0, 1.0)
-	_draw_text("LANTERN / QA-047", card.position + Vector2(14, 22), 11, Color("#82ada7"))
+	_draw_panel(card, Color(0.018, 0.055, 0.064, 0.94), COLD_50, 3.0, 1.0)
+	_draw_text("LANTERN / QA-047", card.position + Vector2(14, 22), 11, GREEN_BRIGHT)
 	var state_color := RED
 	var state := "等待 7.0 秒后给出回答"
 	if phase_index == 4:
@@ -4710,7 +4812,7 @@ func _draw_first_day_terminal_card(frame: Rect2, phase_index: int) -> void:
 		state = "OK · 暂时失去了表达能力"
 		state_color = GREEN_BRIGHT
 	draw_circle(card.position + Vector2(18, 48), 4.0, state_color)
-	_draw_multiline(state, Rect2(card.position + Vector2(32, 34), Vector2(card.size.x - 46, 46)), 12, Color("#d5e0dc"), 20)
+	_draw_multiline(state, Rect2(card.position + Vector2(32, 34), Vector2(card.size.x - 46, 46)), 12, COLD_10, 20)
 	if phase_index >= 6:
 		var pulse := 1.0 if reduced_motion else 0.66 + sin(_motion_clock() * 5.0) * 0.22
 		draw_rect(Rect2(card.position + Vector2(14, 74), Vector2((card.size.x - 28) * pulse, 2)), Color(GREEN_BRIGHT, 0.70))
@@ -4729,33 +4831,33 @@ func _first_day_visual_contract() -> Dictionary:
 
 func _draw_event_scene_header(panel: Rect2) -> void:
 	var kicker := str(current_event.get("kicker", "第 %d 周" % int(model.total_week)))
-	_draw_text(kicker, Vector2(58, 74), 12, Color("#9bc2bd"))
-	_draw_display_text(str(current_event.get("title", "事件")), Vector2(56, 132), 34, Color("#f0f1ea"))
+	_draw_text(kicker, Vector2(58, 74), 12, TERMINAL_TEXT)
+	_draw_display_text(str(current_event.get("title", "事件")), Vector2(56, 132), 34, COLD_05)
 	draw_line(Vector2(58, 154), Vector2(690, 154), Color(0.55, 0.76, 0.76, 0.52), 1.0)
-	_draw_text("记录会留下；解释未必会。", Vector2(58, 178), 12, Color("#c7d5d2"))
+	_draw_text("记录会留下；解释未必会。", Vector2(58, 178), 12, COLD_20)
 	_draw_text("第 %d / %d 页" % [current_event_page + 1, maxi(1, _event_body_pages().size())], panel.position + Vector2(panel.size.x - 118, 17), 12, MUTED)
 
 
 func _draw_event_sidebar(panel: Rect2) -> void:
 	var rect := Rect2(844, 142, 330, 510)
 	_draw_panel(Rect2(rect.position + Vector2(5, 7), rect.size), Color(0.01, 0.035, 0.045, 0.24), Color.TRANSPARENT, 2.0, 0.0)
-	_draw_panel(rect, Color(0.92, 0.92, 0.86, 0.965), Color("#87928e"), 2.0, 1.0)
+	_draw_panel(rect, Color(0.92, 0.92, 0.86, 0.965), COLD_40, 2.0, 1.0)
 	_draw_text("决定备忘", rect.position + Vector2(28, 42), 12, GREEN)
 	_draw_display_text("留档", rect.position + Vector2(26, 84), 24, INK)
-	draw_line(rect.position + Vector2(26, 104), rect.position + Vector2(rect.size.x - 26, 104), Color("#99a39e"), 1.0)
+	draw_line(rect.position + Vector2(26, 104), rect.position + Vector2(rect.size.x - 26, 104), COLD_40, 1.0)
 	if _current_event_uses_lin_portrait() and art_lin != null:
 		var portrait_frame := Rect2(rect.position + Vector2(48, 126), Vector2(234, 300))
 		draw_rect(Rect2(portrait_frame.position + Vector2(4, 5), portrait_frame.size), Color(0.03, 0.06, 0.06, 0.18))
-		draw_rect(portrait_frame, Color("#213943"))
+		draw_rect(portrait_frame, COLD_80)
 		var portrait_art_rect := Rect2(portrait_frame.position + Vector2(30, 0), Vector2(178, 260))
 		draw_texture_rect(art_lin, portrait_art_rect, false, Color(0.92, 0.94, 0.91, 0.98))
-		draw_line(portrait_frame.position + Vector2(14, 263), portrait_frame.position + Vector2(portrait_frame.size.x - 14, 263), Color("#7e969a"), 1.0)
+		draw_line(portrait_frame.position + Vector2(14, 263), portrait_frame.position + Vector2(portrait_frame.size.x - 14, 263), COLD_40, 1.0)
 		_draw_display_text("林越", portrait_frame.position + Vector2(16, 289), 16, Color.WHITE)
-		_draw_text("联合创始人 / CTO", portrait_frame.position + Vector2(76, 289), 12, Color("#c5d3d5"))
+		_draw_text("联合创始人 / CTO", portrait_frame.position + Vector2(76, 289), 12, COLD_20)
 	else:
 		_draw_multiline("提交之后，这次决定会进入长期记录。系统保存结果，不替你解释动机。", Rect2(rect.position + Vector2(28, 132), Vector2(rect.size.x - 56, 112)), 15, INK, 26)
 		_draw_folio_stamp(Rect2(rect.position + Vector2(92, 292), Vector2(146, 64)), "等待决定", GREEN, -0.052)
-		draw_line(rect.position + Vector2(28, 404), rect.position + Vector2(rect.size.x - 28, 404), Color("#a5ada8"), 1.0)
+		draw_line(rect.position + Vector2(28, 404), rect.position + Vector2(rect.size.x - 28, 404), COLD_30, 1.0)
 		_draw_text("第 %d 周 · %s" % [int(model.total_week), _chapter_label()], rect.position + Vector2(28, 438), 12, MUTED)
 	_draw_text("档案编号  %04d" % (abs(str(current_event.get("id", "")).hash()) % 10000), rect.position + Vector2(28, rect.size.y - 28), 12, MUTED)
 
@@ -4785,19 +4887,19 @@ func _draw_result() -> void:
 	var panel := Rect2(250, 80, 780, 558)
 	draw_rect(Rect2(panel.position + Vector2(10, 11), panel.size), Color(0.01, 0.03, 0.035, 0.24))
 	draw_rect(panel, Color(0.95, 0.925, 0.84, 0.98))
-	draw_rect(panel, Color("#9a8e78"), false, 1.0)
+	draw_rect(panel, WARM_40, false, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(6, panel.size.y)), GREEN)
 	for notch in range(24):
 		var notch_y := panel.position.y + 13.0 + notch * 22.5
-		draw_circle(Vector2(panel.end.x, notch_y), 2.2, Color("#606b65"))
+		draw_circle(Vector2(panel.end.x, notch_y), 2.2, COLD_50)
 	_draw_text("SETTLEMENT RECEIPT  /  %02d" % int(model.total_week), panel.position + Vector2(34, 36), 11, GREEN)
 	_draw_text("公司档案 · 本周结算", panel.position + Vector2(panel.size.x - 250, 36), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 212)
-	draw_line(panel.position + Vector2(34, 51), panel.position + Vector2(panel.size.x - 34, 51), Color("#ad9f87"), 1.0)
+	draw_line(panel.position + Vector2(34, 51), panel.position + Vector2(panel.size.x - 34, 51), WARM_40, 1.0)
 	_draw_display_text(result_title, panel.position + Vector2(34, 94), 28, INK)
 	var pages := _result_pages()
 	var page: Array = pages[clampi(result_page, 0, maxi(0, pages.size() - 1))]
 	_draw_paragraph_array(_to_string_array(page), Rect2(panel.position + Vector2(34, 124), Vector2(panel.size.x - 68, 278)), 16, INK, 27)
-	draw_line(panel.position + Vector2(34, panel.size.y - 83), panel.position + Vector2(panel.size.x - 34, panel.size.y - 83), Color("#ad9f87"), 1.0)
+	draw_line(panel.position + Vector2(34, panel.size.y - 83), panel.position + Vector2(panel.size.x - 34, panel.size.y - 83), WARM_40, 1.0)
 	var result_hint := "下一页  %d / %d · %s" % [result_page + 1, pages.size(), _gamepad_shortcut("A", "ENTER")] if pages.size() > 1 else "%s / 点击继续" % _gamepad_shortcut("A", "ENTER")
 	_draw_text("RECEIVED", panel.position + Vector2(34, panel.size.y - 42), 10, MUTED)
 	_draw_folio_stamp(Rect2(panel.end.x - 190, panel.end.y - 72, 146, 46), result_hint, GREEN, -0.018)
@@ -4810,20 +4912,20 @@ func _draw_signature() -> void:
 	var panel := Rect2(272, 106, 736, 506)
 	draw_rect(Rect2(panel.position + Vector2(10, 12), panel.size), Color(0.0, 0.02, 0.025, 0.28))
 	draw_rect(panel, Color(0.95, 0.925, 0.84, 0.99))
-	draw_rect(panel, Color("#998e79"), false, 1.0)
+	draw_rect(panel, WARM_40, false, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(7, panel.size.y)), GREEN)
-	draw_rect(Rect2(panel.position + Vector2(322, -5), Vector2(92, 12)), Color("#a7a89d"))
+	draw_rect(Rect2(panel.position + Vector2(322, -5), Vector2(92, 12)), COLD_30)
 	_draw_text("LANTERN / APPROVAL  ·  REGISTER %02d" % int(model.total_week), panel.position + Vector2(38, 41), 11, GREEN)
 	_draw_display_text("请签署", panel.position + Vector2(38, 91), 30, INK)
 	_draw_text("本周自动生成的行政事项已准备完毕。", panel.position + Vector2(38, 123), 13, MUTED)
 	var paper := Rect2(panel.position + Vector2(38, 158), Vector2(panel.size.x - 76, 218))
-	draw_line(paper.position, Vector2(paper.end.x, paper.position.y), Color("#ad9f87"), 1.0)
-	draw_line(Vector2(paper.position.x, paper.end.y), paper.end, Color("#ad9f87"), 1.0)
-	draw_line(paper.position + Vector2(0, 78), paper.position + Vector2(paper.size.x, 78), Color("#c0b29a"), 1.0)
+	draw_line(paper.position, Vector2(paper.end.x, paper.position.y), WARM_40, 1.0)
+	draw_line(Vector2(paper.position.x, paper.end.y), paper.end, WARM_40, 1.0)
+	draw_line(paper.position + Vector2(0, 78), paper.position + Vector2(paper.size.x, 78), WARM_40, 1.0)
 	_draw_text("批准人", paper.position + Vector2(22, 32), 10, MUTED)
 	_draw_text("创始人", paper.position + Vector2(22, 59), 13, INK)
 	_draw_text("签名", paper.position + Vector2(22, 105), 10, MUTED)
-	draw_line(paper.position + Vector2(22, 178), paper.position + Vector2(paper.size.x - 22, 178), Color("#aeb6b0"), 1.0)
+	draw_line(paper.position + Vector2(22, 178), paper.position + Vector2(paper.size.x - 22, 178), COLD_30, 1.0)
 	var progress := 1.0 if reduced_motion else _ease_out_cubic(clampf((screen_time - 0.18) / 1.05, 0.0, 1.0))
 	_draw_signature_stroke(paper.position + Vector2(78, 126), progress)
 	if progress >= 1.0:
@@ -4891,7 +4993,7 @@ func _event_choice_visual_contract(choice: Dictionary) -> Dictionary:
 	# flag-independent contract makes a future accidental style cue testable.
 	var is_ai := bool(choice.get("ai", false)) or str(choice.get("label", "")).contains("让它来写")
 	return {
-		"fill": Color("#e8f0ea") if is_ai else SURFACE,
+		"fill": COLD_05 if is_ai else SURFACE,
 		"border": GREEN if is_ai else LINE,
 		"radius": 7.0,
 		"border_width": 1.0,
@@ -4911,8 +5013,8 @@ func _elevator_floor_button_visual_contract() -> Dictionary:
 	# same non-interactive path with no tooltip, pulse, hover, or reveal of its own.
 	return {
 		"size": Vector2(42, 42),
-		"fill": Color("#ecefeb"),
-		"border": Color("#aeb6b0"),
+		"fill": COLD_05,
+		"border": COLD_30,
 		"radius": 4.0,
 		"border_width": 1.0,
 		"font_size": 12,
@@ -4933,13 +5035,13 @@ func _draw_night_shift() -> void:
 	_draw_text("夜班 / %s" % str(current_night.get("title", "办公室")), Vector2(44, 29), 13, NIGHT_TEXT)
 	var intro_surface := _night_intro_surface_lines()
 	_draw_text(str(intro_surface.get("subtitle", "")), Vector2(44, 50), 12, NIGHT_MUTED)
-	_draw_text(str(intro_surface.get("opening", "")), Vector2(44, 71), 12, Color("#b7c7ca"))
+	_draw_text(str(intro_surface.get("opening", "")), Vector2(44, 71), 12, COLD_20)
 	var night_hint_plate := Rect2(NIGHT_HINT_SAFE_RECT.position - Vector2(10, 5), NIGHT_HINT_SAFE_RECT.size + Vector2(20, 10))
 	_draw_panel(night_hint_plate, Color(0.025, 0.075, 0.09, 0.92), Color(0.35, 0.50, 0.53, 0.34), 3.0, 1.0)
 	_draw_text("方向键 / D-pad 选择 · E / A 交互 · 鼠标亦可", NIGHT_HINT_SAFE_RECT.position + Vector2(0, 20), 12, NIGHT_TEXT, HORIZONTAL_ALIGNMENT_RIGHT, NIGHT_HINT_SAFE_RECT.size.x)
 	var floor := Rect2(108, 92, 1064, 492)
 	_draw_panel(Rect2(floor.position + Vector2(0, 8), floor.size), Color(0.0, 0.02, 0.03, 0.32), Color.TRANSPARENT, 8.0, 0.0)
-	_draw_panel(floor, Color(0.035, 0.095, 0.12, 0.88), Color("#45636b"), 8.0, 1.0)
+	_draw_panel(floor, Color(0.035, 0.095, 0.12, 0.88), COLD_60, 8.0, 1.0)
 	# Minimal office floor plan: systems, not spectacle.
 	for x in [300.0, 540.0, 780.0, 1010.0]:
 		draw_line(Vector2(x, 92), Vector2(x, 584), Color(0.22, 0.37, 0.41, 0.52), 1.0)
@@ -4954,48 +5056,48 @@ func _draw_night_shift() -> void:
 		var light_strength := clampf(1.0 - distance / 260.0, 0.0, 1.0)
 		draw_rect(Rect2(zone_center - Vector2(68, 222), Vector2(136, 444)), Color(0.36, 0.62, 0.68, 0.018 + light_strength * 0.050))
 	draw_circle(night_player_position, 15.0 + sin(_motion_clock() * 2.8) * 2.0, Color(0.40, 0.72, 0.78, 0.08))
-	draw_circle(night_player_position, 9.0, Color("#67a8c0"))
-	draw_circle(night_player_position, 3.0, Color("#d8e4dc"))
+	draw_circle(night_player_position, 9.0, NIGHT_MUTED)
+	draw_circle(night_player_position, 3.0, COLD_10)
 	for object_index in night_objects.size():
 		var object: Dictionary = night_objects[object_index]
 		var rect := Rect2(object.get("rect", Rect2()))
 		var seen := night_seen.has(str(object.get("id", "")))
 		var focused := object_index == night_focused_object_index
 		var object_pulse := (sin(_motion_clock() * 1.8 + float(str(object.get("id", "")).hash() % 9)) + 1.0) * 0.5
-		var object_border := BLUE if focused else (GREEN_BRIGHT if seen else Color("#49636b").lerp(Color("#66808a"), object_pulse * 0.18))
+		var object_border := BLUE if focused else (GREEN_BRIGHT if seen else COLD_60.lerp(BLUE, object_pulse * 0.18))
 		_draw_night_object_tile(object, rect, seen, object_border)
 		if focused:
 			_draw_panel(rect.grow(4.0), Color.TRANSPARENT, BLUE, 9.0, 2.0)
 		var progress := _night_object_progress_label(str(object.get("id", "")))
 		if not progress.is_empty():
-			_draw_text_centered(progress, Rect2(rect.position + Vector2(0, rect.size.y - 16), Vector2(rect.size.x, 14)), 10, GREEN_BRIGHT if seen else Color("#81918d"), 1.0)
+			_draw_text_centered(progress, Rect2(rect.position + Vector2(0, rect.size.y - 16), Vector2(rect.size.x, 14)), 10, GREEN_BRIGHT if seen else COLD_40, 1.0)
 	if not result_lines.is_empty():
 		draw_rect(Rect2(Vector2.ZERO, VIEW), Color(0.01, 0.02, 0.02, 0.58))
 		var modal := Rect2(256, 112, 768, 484)
 		draw_rect(Rect2(modal.position + Vector2(8, 10), modal.size), Color(0.0, 0.01, 0.02, 0.30))
-		draw_rect(modal, Color("#0b1b20"))
-		draw_rect(modal, Color("#526f77"), false, 1.0)
+		draw_rect(modal, COLD_95)
+		draw_rect(modal, COLD_60, false, 1.0)
 		draw_rect(Rect2(modal.position, Vector2(6, modal.size.y)), GREEN_BRIGHT.darkened(0.18))
-		draw_rect(Rect2(modal.position + Vector2(332, -5), Vector2(104, 12)), Color("#3d4d4b"))
-		_draw_text("现场检查记录 / 夜班", modal.position + Vector2(modal.size.x - 266, 35), TYPE_META, Color("#6f8887"), HORIZONTAL_ALIGNMENT_RIGHT, 234)
+		draw_rect(Rect2(modal.position + Vector2(332, -5), Vector2(104, 12)), COLD_70)
+		_draw_text("现场检查记录 / 夜班", modal.position + Vector2(modal.size.x - 266, 35), TYPE_META, COLD_50, HORIZONTAL_ALIGNMENT_RIGHT, 234)
 		_draw_text("【%s】" % result_title, modal.position + Vector2(30, 44), 14, GREEN_BRIGHT)
-		draw_line(modal.position + Vector2(30, 58), modal.position + Vector2(modal.size.x - 30, 58), Color("#385159"), 1.0)
+		draw_line(modal.position + Vector2(30, 58), modal.position + Vector2(modal.size.x - 30, 58), COLD_70, 1.0)
 		var active_visual_id := str(night_interaction.active_object_id) if night_interaction != null else ""
 		var has_detail_visual := active_visual_id in ["whiteboard", "pothos", "window_desk", "meeting_room_d", "terminal", "corridor", "fridge", "mug"]
 		var copy_width := 404.0 if has_detail_visual else modal.size.x - 60.0
 		_draw_paragraph_array(result_lines, Rect2(modal.position + Vector2(30, 68), Vector2(copy_width, modal.size.y - 150)), 16, NIGHT_TEXT, 27)
 		if has_detail_visual:
 			var detail_rect := Rect2(modal.position + Vector2(462, 68), Vector2(274, 272))
-			draw_rect(detail_rect, Color("#0f1514"))
-			draw_rect(detail_rect, Color("#4b5d57"), false, 1.0)
-			draw_rect(Rect2(detail_rect.position, Vector2(detail_rect.size.x, 4)), Color("#728d85"))
+			draw_rect(detail_rect, COLD_99)
+			draw_rect(detail_rect, MUTED, false, 1.0)
+			draw_rect(Rect2(detail_rect.position, Vector2(detail_rect.size.x, 4)), COLD_50)
 			_draw_night_authored_visual(active_visual_id, detail_rect.grow(-10.0), true)
 		_draw_ledger_button(_night_modal_close_rect(), "收起检查记录", _gamepad_shortcut("A / B", "ENTER"), "night", true, true)
 	else:
 		var exit_button := _night_exit_rect()
 		_draw_ledger_button(exit_button, "锁门离开" if _night_complete() else "门禁：尚未巡检", _gamepad_shortcut("A", "E") if _night_complete() else "", "night", _night_complete())
 		if night_interaction != null and night_interaction.terminal_accepts_command():
-			_draw_text("终端已聚焦 · X / Ctrl+C 中断 · Enter 提交", Vector2(802, 613), 12, Color("#82928e"))
+			_draw_text("终端已聚焦 · X / Ctrl+C 中断 · Enter 提交", Vector2(802, 613), 12, COLD_40)
 
 
 func _night_tone_fixture_contract() -> Dictionary:
@@ -5042,11 +5144,11 @@ func _draw_night_tone_fixtures() -> void:
 
 func _draw_night_object_tile(object: Dictionary, rect: Rect2, seen: bool, border: Color) -> void:
 	var hovered := rect.has_point(mouse_position)
-	_draw_panel(rect, Color("#213239") if hovered else Color("#16272d"), border, 5.0, 1.0)
+	_draw_panel(rect, COLD_80 if hovered else INK, border, 5.0, 1.0)
 	var object_id := str(object.get("id", ""))
 	draw_rect(Rect2(rect.position + Vector2(1, rect.size.y - 35), Vector2(rect.size.x - 2, 34)), Color(0.025, 0.075, 0.09, 0.86))
 	_draw_night_authored_visual(object_id, Rect2(rect.position + Vector2(7, 6), Vector2(rect.size.x - 14, rect.size.y - 42)), false)
-	_draw_text_centered(str(object.get("label", object.get("name", "物件"))), Rect2(rect.position + Vector2(0, rect.size.y - 33), Vector2(rect.size.x, 16)), 11, Color("#aec0be") if seen else Color("#e0e8e5"), 2.0)
+	_draw_text_centered(str(object.get("label", object.get("name", "物件"))), Rect2(rect.position + Vector2(0, rect.size.y - 33), Vector2(rect.size.x, 16)), 11, COLD_30 if seen else COLD_10, 2.0)
 
 
 func _night_visual_state(object_id: String) -> Dictionary:
@@ -5292,13 +5394,13 @@ func _draw_ending() -> void:
 	var ending_sheet := Rect2(62, 40, 824, 644)
 	draw_rect(Rect2(ending_sheet.position + Vector2(10, 12), ending_sheet.size), Color(0.005, 0.02, 0.025, 0.28 * reveal))
 	draw_rect(ending_sheet, Color(0.95, 0.925, 0.85, 0.95))
-	draw_rect(ending_sheet, Color("#998e79"), false, 1.0)
+	draw_rect(ending_sheet, WARM_40, false, 1.0)
 	draw_rect(Rect2(ending_sheet.position, Vector2(7, ending_sheet.size.y)), _ending_accent_color())
 	draw_rect(Rect2(ending_sheet.position + Vector2(368, -5), Vector2(92, 12)), Color(0.64, 0.65, 0.60, 0.86))
 	var name := str(current_ending.get("title", current_ending.get("name", current_ending_id)))
 	_draw_text("COMPANY ARCHIVE  /  %s" % str(model.company_name), ending_sheet.position + Vector2(46, 43), 11, GREEN)
 	_draw_text("ENDING / %02d" % (abs(current_ending_id.hash()) % 97), ending_sheet.position + Vector2(ending_sheet.size.x - 202, 43), 11, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 156)
-	draw_line(ending_sheet.position + Vector2(46, 58), ending_sheet.position + Vector2(ending_sheet.size.x - 46, 58), Color("#aa9d86"), 1.0)
+	draw_line(ending_sheet.position + Vector2(46, 58), ending_sheet.position + Vector2(ending_sheet.size.x - 46, 58), WARM_40, 1.0)
 	_draw_display_text(name, ending_sheet.position + Vector2(46, 116), 42, INK)
 	var pages := _ending_pages()
 	var body: Array = pages[clampi(ending_page, 0, maxi(0, pages.size() - 1))]
@@ -5310,10 +5412,10 @@ func _draw_ending() -> void:
 	ending_button = ending_button.replace("ENTER", _gamepad_shortcut("A", "ENTER"))
 	draw_rect(restart, Color(0.16, 0.24, 0.21, 0.90))
 	draw_line(restart.position, Vector2(restart.end.x, restart.position.y), _ending_accent_color(), 2.0)
-	draw_line(Vector2(restart.position.x, restart.end.y), restart.end, Color("#627069"), 1.0)
-	_draw_text("归档操作", restart.position + Vector2(18, 29), TYPE_META, Color("#9eb0aa"))
+	draw_line(Vector2(restart.position.x, restart.end.y), restart.end, COLD_50, 1.0)
+	_draw_text("归档操作", restart.position + Vector2(18, 29), TYPE_META, COLD_30)
 	_draw_text(ending_button, restart.position + Vector2(138, 30), 13, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, restart.size.x - 158)
-	_draw_text("它记住了。", Vector2(1036, 650), 11, Color("#d4ded9"))
+	_draw_text("它记住了。", Vector2(1036, 650), 11, COLD_10)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -5322,10 +5424,10 @@ func _ending_accent_color() -> Color:
 		"rm_rf": return RED
 		"lights_out": return BLUE.darkened(0.12)
 		"successor": return AMBER
-		"acquihire": return Color("#6279a7")
+		"acquihire": return BLUE
 		"independent": return GREEN
-		"second_time": return Color("#b47c58")
-		_: return Color("#71848b")
+		"second_time": return WARM_60
+		_: return COLD_50
 
 
 func _draw_ending_motif(rect: Rect2) -> void:
@@ -5423,23 +5525,21 @@ func _draw_back_button() -> void:
 
 
 func _draw_office_debt_indicator(rect: Rect2) -> void:
+	# The status word is the picture. A 154x76 thumbnail of a painted office is
+	# too small to read as an office, and it competed with the one line that
+	# actually lands: an office that has stopped being a place and become a
+	# process. Paper is the only physical trace kept, because unclaimed paper is
+	# legible at any size and it accumulates rather than decorates.
 	var tier := int(model.office_deterioration_tier())
-	_draw_text("OFFICE / 今日", rect.position + Vector2(6, 18), 10, Color("#83918f"))
-	var thumbnail := Rect2(rect.position + Vector2(6, 30), Vector2(154, 76))
-	_draw_texture_cover(_workspace_scene_texture(), thumbnail, Color(0.72 - tier * 0.07, 0.78 - tier * 0.07, 0.76 - tier * 0.06, 1.0), Vector2(0.66, 0.58))
-	draw_rect(thumbnail, Color(0.02, 0.07, 0.085, 0.28 + tier * 0.07))
-	draw_rect(Rect2(thumbnail.position, Vector2(4, thumbnail.size.y)), GREEN_BRIGHT)
-	for i in tier:
-		var paper := Rect2(thumbnail.position + Vector2(18 + i * 27, 57 - (i % 2) * 4), Vector2(22, 12))
-		draw_rect(paper, Color(0.84, 0.82, 0.74, 0.74))
-		draw_line(paper.position + Vector2(4, 4), paper.position + Vector2(17, 4), Color(0.39, 0.43, 0.41, 0.55), 1.0)
-	if tier >= 2:
-		_draw_panel(Rect2(thumbnail.position + Vector2(116, 48), Vector2(24, 23)), Color(0.43, 0.34, 0.25, 0.86), Color(0.62, 0.51, 0.38, 0.80), 1.0, 1.0)
-	if tier >= 3:
-		draw_line(thumbnail.position + Vector2(35, 17), thumbnail.position + Vector2(104, 23), Color(0.73, 0.62, 0.54, 0.68), 2.0)
+	_draw_text("办公室", rect.position + Vector2(6, 20), TYPE_META, COLD_40)
+	draw_line(rect.position + Vector2(6, 32), rect.position + Vector2(190, 32), Color(COLD_60, 0.55), 1.0)
 	var status_names := ["尚可", "有点乱", "没人收拾", "流程正常", "完全正常"]
-	_draw_text("状态 / %s" % status_names[clampi(tier, 0, 4)], rect.position + Vector2(7, 126), 10, Color("#c0cdca"))
-	_draw_text("留下的不是灰尘，是流程。", rect.position + Vector2(7, 148), 9, Color("#8fa19e"))
+	_draw_display_text(status_names[clampi(tier, 0, 4)], rect.position + Vector2(6, 62), TYPE_SECTION, COLD_05)
+	_draw_text("留下的不是灰尘，是流程。", rect.position + Vector2(6, 86), TYPE_META, COLD_40)
+	for i in tier:
+		var sheet := Rect2(rect.position + Vector2(6 + i * 6, 104 + i * 9), Vector2(120 - i * 8, 30))
+		draw_rect(sheet, Color(WARM_20, 0.09 + i * 0.04))
+		draw_rect(sheet, Color(WARM_40, 0.20 + i * 0.05), false, 1.0)
 
 
 func _draw_toast() -> void:
@@ -5478,12 +5578,12 @@ func _draw_settings_launcher() -> void:
 	var rect := _settings_button_rect()
 	var hovered := rect.has_point(mouse_position)
 	draw_rect(Rect2(rect.position + Vector2(3, 3), rect.size), Color(0.0, 0.02, 0.025, 0.18))
-	draw_rect(rect, Color("#172725") if hovered else Color("#21302d"))
-	draw_rect(rect, Color("#60746e"), false, 1.0)
+	draw_rect(rect, INK if hovered else INK)
+	draw_rect(rect, COLD_50, false, 1.0)
 	draw_rect(Rect2(rect.position, Vector2(4, rect.size.y)), GREEN)
 	var launcher_key := "START" if gamepad_focus_visible else "F1"
-	_draw_text(launcher_key, rect.position + Vector2(10, 27), 10, Color("#83aaa2"))
-	_draw_text("设置", rect.position + Vector2(58 if gamepad_focus_visible else 44, 28), 12, Color("#e1e8e2"))
+	_draw_text(launcher_key, rect.position + Vector2(10, 27), 10, GREEN_BRIGHT)
+	_draw_text("设置", rect.position + Vector2(58 if gamepad_focus_visible else 44, 28), 12, COLD_10)
 
 
 func _draw_settings_overlay() -> void:
@@ -5493,20 +5593,20 @@ func _draw_settings_overlay() -> void:
 	var panel := Rect2(354, 78, 572, 562)
 	draw_rect(Rect2(panel.position + Vector2(10, 12), panel.size), Color(0.0, 0.02, 0.03, 0.32))
 	draw_rect(panel, Color(0.93, 0.93, 0.87, 0.99))
-	draw_rect(panel, Color("#84958e"), false, 1.0)
+	draw_rect(panel, COLD_40, false, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(7, panel.size.y)), GREEN)
-	draw_rect(Rect2(panel.position + Vector2(242, -5), Vector2(88, 12)), Color("#a9afa6"))
+	draw_rect(Rect2(panel.position + Vector2(242, -5), Vector2(88, 12)), COLD_30)
 	_draw_text("CONTROL SHEET  /  LOCAL", panel.position + Vector2(34, 34), 11, GREEN)
 	_draw_display_text("设置与辅助", panel.position + Vector2(34, 75), 28, INK)
 	_draw_text("这些选项会保存在本机，不会改写战役选择。", panel.position + Vector2(34, 103), 12, MUTED)
 	_draw_folio_stamp(Rect2(panel.end.x - 154, panel.position.y + 27, 118, 48), "PAUSED", GREEN, -0.02)
-	draw_line(panel.position + Vector2(34, 127), panel.position + Vector2(panel.size.x - 34, 127), Color("#9fa9a2"), 1.0)
+	draw_line(panel.position + Vector2(34, 127), panel.position + Vector2(panel.size.x - 34, 127), COLD_30, 1.0)
 	_draw_settings_row(_settings_motion_rect(), "降低动态效果", "关闭滑入、脉冲与长时间静默等待", reduced_motion, _focus_is("settings", 0))
 	_draw_settings_row(_settings_audio_rect(), "全部声音", "环境 / 配乐 / 物理拟音", office_audio != null and not office_audio.muted, _focus_is("settings", 1))
 	var fullscreen_on := get_window().mode == Window.MODE_FULLSCREEN
 	_draw_settings_row(_settings_fullscreen_rect(), "全屏显示", "也可随时按 F11", fullscreen_on, _focus_is("settings", 2))
 	var guide := Rect2(panel.position + Vector2(34, 363), Vector2(panel.size.x - 68, 116))
-	draw_line(guide.position, guide.position + Vector2(guide.size.x, 0), Color("#9fa9a2"), 1.0)
+	draw_line(guide.position, guide.position + Vector2(guide.size.x, 0), COLD_30, 1.0)
 	_draw_text("手柄 / 键盘速查", guide.position + Vector2(0, 25), TYPE_META, INK)
 	_draw_text("D-pad 选项   A 确认 / 亲自   X 委派   Y 结束周", guide.position + Vector2(0, 50), TYPE_META, MUTED)
 	_draw_text("LB / RB 翻档   B 返回   START 设置", guide.position + Vector2(0, 72), TYPE_META, MUTED)
@@ -5524,7 +5624,7 @@ func _draw_settings_row(rect: Rect2, title: String, description: String, enabled
 		_draw_panel(rect.grow(3.0), Color.TRANSPARENT, GREEN_BRIGHT, RADIUS_CONTROL + 2.0, 2.0)
 	if enabled:
 		draw_rect(Rect2(rect.position, Vector2(3, rect.size.y)), GREEN)
-	draw_line(Vector2(rect.position.x, rect.end.y), rect.end, Color("#abb3ad"), 1.0)
+	draw_line(Vector2(rect.position.x, rect.end.y), rect.end, COLD_30, 1.0)
 	_draw_text(title, rect.position + Vector2(18, 26), 13, INK)
 	_draw_text(description, rect.position + Vector2(18, 48), TYPE_META, MUTED)
 	var toggle := Rect2(rect.end - Vector2(72, 45), Vector2(52, 26))
@@ -5532,14 +5632,14 @@ func _draw_settings_row(rect: Rect2, title: String, description: String, enabled
 	# software pill. The chosen state is the only solid impression.
 	var off_cell := Rect2(toggle.position + Vector2(1, 2), Vector2(22, 22))
 	var on_cell := Rect2(toggle.position + Vector2(29, 2), Vector2(22, 22))
-	draw_rect(off_cell, Color("#e1dfd1"))
-	draw_rect(on_cell, Color("#e1dfd1"))
-	draw_rect(off_cell, Color("#8c968f"), false, 1.0)
-	draw_rect(on_cell, Color("#8c968f"), false, 1.0)
+	draw_rect(off_cell, WARM_10)
+	draw_rect(on_cell, WARM_10)
+	draw_rect(off_cell, COLD_40, false, 1.0)
+	draw_rect(on_cell, COLD_40, false, 1.0)
 	var active_cell := on_cell if enabled else off_cell
-	draw_rect(active_cell.grow(-2.0), GREEN if enabled else Color("#59645e"))
-	_draw_text_centered("关", off_cell, TYPE_META, Color("#f2f4ef") if not enabled else MUTED, 1.0)
-	_draw_text_centered("开", on_cell, TYPE_META, Color("#f2f4ef") if enabled else MUTED, 1.0)
+	draw_rect(active_cell.grow(-2.0), GREEN if enabled else COLD_60)
+	_draw_text_centered("关", off_cell, TYPE_META, COLD_05 if not enabled else MUTED, 1.0)
+	_draw_text_centered("开", on_cell, TYPE_META, COLD_05 if enabled else MUTED, 1.0)
 
 
 func _open_settings() -> void:
@@ -5645,7 +5745,7 @@ func _draw_event_silence(panel: Rect2) -> void:
 	var scene := Rect2(panel.position + Vector2(34, 48), Vector2(656, 174))
 	draw_line(scene.position, Vector2(scene.position.x, scene.end.y), Color(GREEN, 0.54), 2.0)
 	_draw_text("08:47 / 录音未开始", scene.position + Vector2(22, 28), 12, MUTED)
-	_draw_cup_icon(scene.position + Vector2(126, 106), 0.68, Color("#e6dfcf"), Color("#a87551"))
+	_draw_cup_icon(scene.position + Vector2(126, 106), 0.68, WARM_10, WARM_60)
 	_draw_display_text("林越把杯子放下。", scene.position + Vector2(190, 104), 18, INK)
 	_draw_text("……", scene.position + Vector2(scene.size.x - 54, 106), 15, MUTED)
 	var wait_cap := minf(_event_page_hold_seconds(), 0.15 if reduced_motion else 10.0)
@@ -6357,8 +6457,8 @@ func _category_color(category: String) -> Color:
 		"叙事", "narrative": return AMBER
 		"能力", "capability": return BLUE
 		"团队", "team": return GREEN
-		"经营", "strategy": return Color("#5f768f")
-		_: return Color("#6e6c80")
+		"经营", "strategy": return BLUE
+		_: return COLD_60
 
 
 func _category_label(category: String) -> String:
@@ -6478,6 +6578,7 @@ func _save_game() -> Dictionary:
 	var payload: Dictionary = director.save_payload()
 	payload["ui_schema_version"] = UI_SCHEMA_VERSION
 	payload["ui_used_actions"] = used_action_ids
+	payload["ui_used_action_authors"] = used_action_authors
 	payload["ui_week_actions"] = week_action_ids
 	payload["ui_action_pool_week"] = int(model.total_week)
 	payload["ui_terminal"] = terminal_lines
@@ -6636,17 +6737,19 @@ func _draw_ledger_button(rect: Rect2, label: String, shortcut: String = "", vari
 			text_color = MUTED
 			border = LINE
 		"attention":
-			fill = Color("#f4eee4")
+			# Warmth belongs in the word, not in an outline. This is the one human
+			# decision on a cold screen; it should read as ink, not as a warning.
+			fill = WARM_05
 			text_color = PAPER_AMBER
-			border = AMBER
+			border = WARM_40
 		"danger":
-			fill = Color("#f7eded")
+			fill = COLD_00
 			text_color = RED
 			border = RED
 		"night":
-			fill = Color("#182327")
+			fill = INK
 			text_color = NIGHT_TEXT
-			border = Color("#718387")
+			border = COLD_50
 	if not enabled:
 		fill = DISABLED_BG
 		text_color = DISABLED_TEXT
@@ -6664,14 +6767,18 @@ func _draw_ledger_button(rect: Rect2, label: String, shortcut: String = "", vari
 	_draw_panel(face, fill, border, RADIUS_CONTROL, 1.5 if hovered or focused else 1.0)
 	if focused:
 		_draw_panel(face.grow(4.0), Color.TRANSPARENT, GREEN_BRIGHT, RADIUS_CONTROL + 3.0, 2.0)
+	# The label carries the decision; it should not be the same size as the page
+	# numbers. Long fallback labels ("需算力 8 / 当前 7") step down one rung so a
+	# blocked control still reads as one line rather than clipping.
+	var label_size := TYPE_ACTION if label.length() <= 7 else TYPE_LABEL
 	if shortcut.is_empty():
-		_draw_text_centered(label, face, TYPE_LABEL, text_color, 2.0)
+		_draw_text_centered(label, face, label_size, text_color, 2.0)
 	else:
 		var key_width := maxf(48.0, font.get_string_size(shortcut, HORIZONTAL_ALIGNMENT_LEFT, -1, TYPE_META).x + 20.0)
 		var label_rect := Rect2(face.position + Vector2(10, 0), Vector2(face.size.x - key_width - 14.0, face.size.y))
 		var key_rect := Rect2(face.end.x - key_width, face.position.y, key_width, face.size.y)
 		draw_line(Vector2(key_rect.position.x, face.position.y + 10), Vector2(key_rect.position.x, face.end.y - 10), Color(border, 0.34), 1.0)
-		_draw_text_centered(label, label_rect, TYPE_LABEL, text_color, 2.0)
+		_draw_text_centered(label, label_rect, label_size, text_color, 2.0)
 		_draw_text_centered(shortcut, key_rect, TYPE_META, Color(text_color, 0.78), 2.0)
 
 
