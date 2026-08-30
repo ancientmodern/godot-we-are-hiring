@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 REQUIREMENT_ID = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
-EXPECTED_REQUIREMENT_COUNT = 267
+EXPECTED_REQUIREMENT_COUNT = 272
 ALLOWED_STATUSES = {"Verified", "Partial", "Implemented-unverified", "Unverified"}
 
 

@@ -1800,7 +1800,7 @@ func _build_company_settlement_lines(operations_tick: Dictionary, business_tick:
 			if commitment_value is Dictionary:
 				unpaid_total += maxi(0, int(Dictionary(commitment_value).get("unpaid_usd", 0)))
 		if unpaid_total > 0:
-			lines.append("现金预警：$%s 到期承诺尚未支付；它会留在台账里，不会被一句‘下周处理’抹掉。" % _compact_usd(unpaid_total))
+			lines.append("现金预警：$%s 到期承诺尚未支付；它会留在台账里，不会被一句『下周处理』抹掉。" % _compact_usd(unpaid_total))
 
 	if not joined_names.is_empty():
 		positive_lines.append("入职回执：%s 正式加入。门牌已经放上桌，午餐群也完成了比股权谈判更快的一轮投票。" % "、".join(joined_names))
@@ -2521,7 +2521,7 @@ func _resolve_industry_standard_draft(choice_id: String) -> Dictionary:
 
 func _systemic_event_receipt(event_id: String, choice_id: String, domain: String, result: Dictionary) -> String:
 	if not bool(result.get("ok", false)):
-		return "经营回执：状态已先一步变化，本次未重复执行（%s）。至少省下一封‘请忽略上一封邮件’。" % str(result.get("reason", "state_changed"))
+		return "经营回执：状态已先一步变化，本次未重复执行（%s）。至少省下一封『请忽略上一封邮件』。" % str(result.get("reason", "state_changed"))
 	var amount_usd := int(result.get("amount_usd", result.get("cash_received_usd", 0)))
 	if amount_usd > 0:
 		var stage := str(result.get("stage", "")).to_upper()
@@ -2538,7 +2538,7 @@ func _systemic_event_receipt(event_id: String, choice_id: String, domain: String
 	if event_id in ["requisition_scope", "reference_discrepancy", "title_inflation"]:
 		return "招聘回执：%s 的筛选状态与岗位边界已写回真实管线。" % str(result.get("candidate_id", result.get("requisition_id", "该岗位")))
 	if event_id in ["first_manager_span", "promotion_calibration", "mentor_burnout"] or event_id.begins_with("manager_overload") or event_id.begins_with("flight_risk"):
-		return "组织回执：%s 的职级、负荷与留任状态已更新；这次不是把问题改名为‘成长机会’。" % str(result.get("employee_id", "相关同事"))
+		return "组织回执：%s 的职级、负荷与留任状态已更新；这次不是把问题改名为『成长机会』。" % str(result.get("employee_id", "相关同事"))
 	if result.has("service_id") or domain in ["vendor", "saas"]:
 		return "采购回执：%s 的席位、用量、续约与现金时点已更新。工具没有变聪明，但账单终于说人话了。" % str(result.get("service_id", "服务合同"))
 	if result.has("lease") or result.has("fitout") or event_id.begins_with("office_") or event_id in ["landlord_free_rent", "fitout_delay", "meeting_room_capacity", "office_hvac", "sublease_opportunity"]:

@@ -8,6 +8,7 @@ The model makes each week easier. It may also become the real author of the comp
 
 ## Highlights
 
+- Three origins, each with its own prologue: why you ended up at that garage door
 - A complete five-chapter campaign spanning 45 in-game weeks
 - Interlocking systems for fundraising, hiring, equity, offices, and SaaS
 - Fixed and dynamic narrative events with branching outcomes
