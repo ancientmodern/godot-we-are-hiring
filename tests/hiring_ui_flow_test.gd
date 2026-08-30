@@ -112,7 +112,22 @@ func _test_new_company_opening_action_and_save(ui) -> void:
 	ui._start_new_company()
 
 	_check(ui.model.company_name == "UI Contract Labs", "new-company form initializes the director with the entered name")
-	_check(ui.screen == HiringMain.Screen.EVENT, "new company opens the authored garage event")
+	_check(ui.screen == HiringMain.Screen.EVENT, "new company opens an authored scene rather than the dashboard")
+
+	# A new campaign now opens on the chosen origin's prologue. It is presentation
+	# only: it resolves no director key, and it hands the untouched garage event on
+	# when it finishes, so all three origins arrive at the same door.
+	_check(str(ui.model.origin_id) == "bigco", "the default origin is recorded on the model")
+	_check(ui._is_origin_prologue(), "a new campaign opens on the origin prologue")
+	_check(str(ui.current_event.get("id", "")) == "prologue_bigco", "the prologue matches the selected origin")
+	_check(str(Dictionary(ui.pending_opening_event).get("id", "")) == "garage_opening", "the garage waits behind the prologue instead of being replaced by it")
+	_check(ui.director.resolved_fixed_count() == 0, "the prologue resolves no director key of its own")
+	var prologue_phases: int = Array(ui.current_event.get("opening_phases", [])).size()
+	_check(prologue_phases >= 5, "the prologue is a scene, not a splash screen (%d phases)" % prologue_phases)
+	ui._complete_first_day_prologue(true)
+	_check(bool(ui.model.flags.get("origin_prologue_seen", false)), "completing the prologue is recorded")
+	_check(Dictionary(ui.pending_opening_event).is_empty(), "the prologue hands the garage on exactly once")
+
 	_check(str(ui.current_event.get("id", "")) == "garage_opening", "UI receives garage_opening from CampaignDirector")
 	_check(FileAccess.file_exists(SAVE_PATH), "opening UI state creates a save")
 	var opening_save := _read_json_dictionary(SAVE_PATH)

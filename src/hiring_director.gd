@@ -1534,6 +1534,10 @@ func _condition_atom(atom: String) -> bool:
 			return _last_action_id == right
 		if left == "chapter":
 			return model.chapter == int(right)
+		if left == "origin":
+			# Origins gate authored options on scenes every campaign already plays,
+			# rather than adding scenes only one campaign can reach.
+			return str(model.origin_id) == right
 		return is_equal_approx(_condition_value(left), float(right))
 	for operator in [">=", "<=", ">", "<"]:
 		if not atom.contains(operator):

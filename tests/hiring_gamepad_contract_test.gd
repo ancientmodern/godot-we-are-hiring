@@ -65,7 +65,7 @@ func _test_input_map() -> void:
 
 func _test_router_boot_contract(ui) -> void:
 	_check(ui.focus_router != null, "HiringMain creates the shared focus router during ready")
-	_check(str(ui.focus_router.section) == "onboarding" and ui.focus_router.item_count == 1, "fresh onboarding exposes one safe default focus")
+	_check(str(ui.focus_router.section) == "origin_choices" and ui.focus_router.item_count == HiringContent.ORIGIN_ORDER.size(), "fresh onboarding exposes one safe default focus on the origin sheet")
 	_check(ui._focus_is("onboarding", 0) == false, "focus ring stays quiet until directional input is used")
 
 
@@ -83,9 +83,21 @@ func _test_start_and_pause_contract(ui) -> void:
 
 
 func _test_onboarding_and_dashboard_contract(ui) -> void:
+	# Onboarding is two sheets now: which past is yours, then the company you are
+	# about to file. Both must be reachable on the pad alone.
+	_check(ui.onboarding_step == 0 and ui._focus_is("origin_choices", ui.selected_origin), "onboarding opens on the origin sheet with one visible focus")
+	ui._unhandled_input(_joy_event(JOY_BUTTON_DPAD_DOWN))
+	_check(ui.selected_origin == 1, "D-pad moves between filed origins")
+	ui._unhandled_input(_joy_event(JOY_BUTTON_DPAD_UP))
+	_check(ui.selected_origin == 0, "D-pad reverses without losing the origin selection")
 	ui._unhandled_input(_joy_event(JOY_BUTTON_A))
-	_check(ui.screen == HiringMain.Screen.EVENT and str(ui.current_event.get("id", "")) == "garage_opening", "A completes fresh onboarding with the default company name")
-	for _page in 8:
+	_check(ui.onboarding_step == 1, "A files the chosen origin and turns to the company sheet")
+	ui._unhandled_input(_joy_event(JOY_BUTTON_B))
+	_check(ui.onboarding_step == 0, "B turns back to the origin sheet instead of settling anything")
+	ui._unhandled_input(_joy_event(JOY_BUTTON_A))
+	ui._unhandled_input(_joy_event(JOY_BUTTON_A))
+	_check(ui.screen == HiringMain.Screen.EVENT and ui._is_origin_prologue(), "A completes fresh onboarding into the chosen origin's prologue")
+	for _page in 24:
 		if ui.screen != HiringMain.Screen.EVENT:
 			break
 		ui.event_page_elapsed = 999.0

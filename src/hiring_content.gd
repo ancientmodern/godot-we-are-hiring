@@ -473,6 +473,446 @@ const EMPLOYEE_TEMPLATES: Dictionary = {
 	},
 }
 
+## Origins / 出身.
+##
+## Three ways of arriving at the same garage door. The prologues are equal in
+## length and in kind — all three are the same authored scene grammar as the
+## garage opening itself, so the game never changes shape between them, and
+## they converge on a door rather than on a montage.
+##
+## Each origin owns one permanent, visible rule rather than a starting number:
+## a numeric head start gets erased by week ten and is then read, correctly, as
+## having meant nothing. Each rule also has a cost the player can see, because a
+## background that only unlocks things reads as a key, and a background that can
+## also cost you something reads as a person.
+const ORIGINS: Dictionary = {
+	"bigco": {
+		"id": "bigco", "order": 0,
+		"name": "大厂第六年",
+		"headline": "你在那里做到了没有人记得你做过什么。",
+		"detail": [
+			"六年。三个部门。四个 leader。",
+			"你写过的文档还在，署名是你的，句子不是。",
+		],
+		"rule_title": "你见过这套流程",
+		"rule": "涉及人的行动多一条路。它每次都有效，代价记在连贯上。",
+		"lin": "林越比你早走一年。",
+		"history_lines": [
+			"你们在上一家公司的同一个组待过两年。她做模型，你做那些需要有人替它说话的部分。",
+			"她比你早走一年。走的时候只在群里发了一句『先这样』，没有人接。",
+			"这一年里你们偶尔在凌晨互相丢论文、报错截图和没说完的话。",
+		],
+		"prologue": "prologue_bigco",
+	},
+	"serial": {
+		"id": "serial", "order": 1,
+		"name": "第二家公司",
+		"headline": "上一家已经卖掉了。没有人问你现在过得好不好。",
+		"detail": [
+			"九个人和一条评测管道，换了一个不用解释的数字。",
+			"公司主体没人要。它还挂在你的名下。",
+		],
+		"rule_title": "他们已经认识你",
+		"rule": "融资更容易开口。同一套说法他们听过一遍，所以叙事每周多掉一点。",
+		"lin": "林越在上一家公司当面告诉过你产品不成立。当时你没听。",
+		"history_lines": [
+			"她在你上一家公司待了十四个月。她是唯一一个当面告诉你产品不成立的人。",
+			"当时你没听。半年后所有人都同意她是对的，包括你。",
+			"交割那天她没来。后来她给你发过一条消息：『下次先做出来再讲。』你到现在也没回。",
+		],
+		"prologue": "prologue_serial",
+	},
+	"funded": {
+		"id": "funded", "order": 2,
+		"name": "不用担心钱",
+		"headline": "你从来没有为钱工作过。",
+		"detail": [
+			"四个 offer 放在一个文件夹里，三个月没打开。",
+			"挑哪一个都不会改变你明年住在哪儿、几点睡。",
+		],
+		"rule_title": "钱不是你的问题",
+		"rule": "每周烧得更慢。投资人也因此不太把你当回事，融资拿到的叙事更少。",
+		"lin": "同一个实验室三年，你没见林越休息过一次。",
+		"history_lines": [
+			"七年前的大学交换项目，你们在 314 教室做完第一次通宵。她负责模型，你负责把演示讲得像一切都来得及。",
+			"回宿舍时，你们在路口站得比告别需要的久。第二天谁都没提。",
+			"这些年，你们偶尔在凌晨互相丢论文、报错截图和没说完的话。",
+		],
+		"prologue": "prologue_funded",
+	},
+}
+
+const ORIGIN_ORDER: Array[String] = ["bigco", "serial", "funded"]
+const DEFAULT_ORIGIN := "bigco"
+
+
+static func get_origin(id: Variant) -> Dictionary:
+	var key := str(id)
+	var origin: Dictionary = ORIGINS.get(key, ORIGINS[DEFAULT_ORIGIN])
+	return origin.duplicate(true)
+
+
+static func origin_prologue(id: Variant) -> Dictionary:
+	var prologue_id := str(get_origin(id).get("prologue", ""))
+	var prologue: Dictionary = PROLOGUES.get(prologue_id, {})
+	return prologue.duplicate(true)
+
+
+## Prologues. Every phase uses the same keys as `FIXED_EVENTS.0:1.opening_phases`
+## so the presentation layer needs no second scene grammar: title, speaker, body,
+## optional memory_key + responses, optional variant_memory_key + body_variants,
+## and a continue label. The final phase of each prologue hands off to the garage.
+const PROLOGUES: Dictionary = {
+	"prologue_bigco": {
+		"id": "prologue_bigco", "origin": "bigco",
+		"title": "离职", "kicker": "上一家公司 · 最后一个月",
+		"phases": [
+			{
+				"id": "align", "title": "对齐", "speaker": "周航 · 你的上级",
+				"scene": "boardroom", "place": "上一家公司 · 会议室 C", "evidence": ["会议室 C · 15:40", "参会 7 人 · 第 4 次"],
+				"body": [
+					"会议室 C。第四次对齐。",
+					"『我们先对齐一下颗粒度。』周航说。",
+					"屏幕上是你写的方案。他翻到第七页，又翻回第一页。",
+					"『你的思路我是认的。我担心的是这里的认知还没拉齐。』",
+					"在座七个人。你不知道要和谁拉齐。",
+				],
+				"memory_key": "bigco_align",
+				"responses": [
+					{"id": "ask", "label": "和谁拉齐？"},
+					{"id": "yield", "label": "好，我下来再对一版。"},
+					{"id": "wait", "label": "（不说话，等他说完）"},
+				],
+			},
+			{
+				"id": "rewrite", "title": "更像这家公司会说的话", "speaker": "文档",
+				"scene": "boardroom", "place": "上一家公司 · 共享文档", "evidence": ["方案 v7", "最后修改人：不是你"],
+				"variant_memory_key": "bigco_align",
+				"body_variants": {
+					"ask": ["『先不用具体到人。』他说，『我们先把 context 同步齐。』"],
+					"yield": ["『好。』他很满意。会议提前八分钟结束，本季度第一次。"],
+					"wait": ["他等了两秒，把话接了下去。没有人注意到那两秒。"],
+				},
+				"body": [
+					"两天后文档回来了。",
+					"结构没动。每一句都被重写过。",
+					"现在它读起来更像这家公司会说的话。",
+					"署名还是你。",
+					"你在评论区回了『好的，感谢』。",
+					"然后从头看了一遍，没找出哪一句是你写的。",
+				],
+				"continue": "关掉文档", "advance_foley": "page",
+			},
+			{
+				"id": "ownership", "title": "ownership", "speaker": "周航",
+				"scene": "boardroom", "place": "上一家公司 · 小会议室", "evidence": ["绩效面谈记录", "25 分钟 · 已归档"],
+				"body": [
+					"绩效面谈二十五分钟，有十九分钟在讲一个词。",
+					"『你今年的 ownership 可以再强一点。』",
+					"他说的那个项目三月被划走了。划走那天你发过邮件问，没有人回。",
+					"『我不是说你做得不好。是说要更主动地对结果负责。』",
+					"你想问：三月的时候，结果归谁。",
+					"你没有问。",
+				],
+				"continue": "在评估表上签字", "advance_foley": "signature",
+			},
+			{
+				"id": "roster", "title": "组织健康度", "speaker": "周航",
+				"scene": "boardroom", "place": "上一家公司 · 一个只给你的表格", "evidence": ["组织健康度.xlsx", "31 行 · 仅你可见"],
+				"body": [
+					"他发来一个表格，共享权限只给了你一个人。",
+					"三十一行。你认识其中十九个。",
+					"『帮我从组织健康度的角度看一下，哪些是可以优化的。』",
+					"『不是决定啊。先拉个 list，有个盘子。』",
+					"表格最后一行，是一个下周转正的实习生。",
+				],
+				"memory_key": "bigco_roster",
+				"responses": [
+					{"id": "refuse", "label": "这个我做不了。"},
+					{"id": "delay", "label": "我需要时间核一下。"},
+					{"id": "comply", "label": "（把表格填完）"},
+				],
+			},
+			{
+				"id": "voice", "title": "你的语气", "speaker": "HRBP",
+				"scene": "office_day", "place": "上一家公司 · 茶水间", "evidence": ["沟通会排期", "周四 · 六场 · 间隔 20 分钟"],
+				"variant_memory_key": "bigco_roster",
+				"body_variants": {
+					"refuse": ["他说他理解。三天后名单还是出来了，比你看到的那版多了四个人。"],
+					"delay": ["他说不着急。第二天名单就出来了，比你看到的那版多了四个人。"],
+					"comply": ["你填完了。名单出来的时候多了四个人，其中两个不在你填的那一列。"],
+				},
+				"body": [
+					"沟通会安排在周四下午。六场，都在会议室 C，间隔二十分钟。",
+					"HRBP 在茶水间找到你：『公告还是你来写吧。』",
+					"『你的语气大家更信。』",
+					"她说这句话的时候是真诚的。",
+				],
+				"memory_key": "bigco_exit",
+				"responses": [
+					{"id": "one_line", "label": "新建一个文档，写一句真的。"},
+					{"id": "hand_back", "label": "把编辑权限交回去。"},
+					{"id": "write_it", "label": "写。而且写得很好。"},
+				],
+			},
+			{
+				"id": "badge", "title": "工牌", "speaker": "",
+				"scene": "office_day", "place": "上一家公司 · 最后一天", "evidence": ["工牌", "已放在他桌上"],
+				"variant_memory_key": "bigco_exit",
+				"body_variants": {
+					"one_line": [
+						"你新建了一个文档，全员可见，正文一行：",
+						"『这个决定不是我做的。我不打算用我的语气替它说话。』",
+						"十一分钟后文档被撤回。",
+						"那十一分钟里，四十个人打开过它。三个人给你发了消息。",
+						"你一条都没回，因为你不知道回什么。",
+					],
+					"hand_back": [
+						"你把自己从编辑权限里移出来，改成只读。",
+						"在群里说：这份我不写了。没有人回复。",
+						"公告第二天照常发出，署名是『公司』。",
+						"写得很好。有一句你认得，是你四月写在另一份文档里的。",
+					],
+					"write_it": [
+						"你写了。你写得比谁都好，因为你确实认识那十九个人。",
+						"沟通会那天，有两个人对你说了谢谢。",
+						"第三个人什么都没说，只是把合影发在了朋友圈，配文：他人还不错。",
+						"你在那条下面点了赞，又取消了。",
+					],
+				},
+				"body": [
+					"第二天你把工牌放在周航桌上。他不在工位。",
+					"你在楼下站了一会儿，等一个不会来的人叫住你。",
+				],
+				"continue": "走出去", "advance_foley": "door",
+			},
+			{
+				"id": "message", "title": "还做不做", "speaker": "林越",
+				"scene": "title", "place": "凌晨 01:17", "lin": true,
+				"body": [
+					"外面在下雨。你没带伞，也没有要去的地方。",
+					"手机亮了。林越，比你早走一年。",
+					"『还做不做？』",
+					"后面跟着一张截图：第 47 题的失败记录。",
+					"你站在雨里把那张图读完了。",
+				],
+				"continue": "回『做』", "complete": true,
+			},
+		],
+	},
+	"prologue_serial": {
+		"id": "prologue_serial", "origin": "serial",
+		"title": "上一家", "kicker": "第一家公司 · 最后一天",
+		"phases": [
+			{
+				"id": "shutdown", "title": "关服", "speaker": "",
+				"scene": "office_night", "place": "第一家公司 · 机房", "evidence": ["机柜 A-3", "23:07 · 最后一台"],
+				"body": [
+					"最后一天，办公室里只剩你和一台还没断电的服务器。",
+					"运维在群里问：几点关？",
+					"你说：等我下班。",
+					"你已经没有下班这个概念了。你在那把椅子上坐到十一点。",
+					"关的时候没有声音。风扇停了以后，你才听见空调。",
+				],
+				"continue": "拔掉电源", "advance_foley": "server_stop",
+			},
+			{
+				"id": "signing", "title": "人才与部分资产", "speaker": "对方的律师",
+				"scene": "boardroom", "place": "收购方 · 会议室", "evidence": ["意向书", "人才与部分资产 · 不含主体"],
+				"body": [
+					"意向书的标题写着『人才与部分资产收购』。",
+					"他们要九个人和那条评测管道。他们不要公司主体。",
+					"律师说这是标准结构，不用多想。",
+					"你没有多想。你签了。",
+					"签完才发现，你连一支自己的笔都没带。",
+				],
+				"memory_key": "serial_signing",
+				"responses": [
+					{"id": "clean", "label": "签得干净。谁都不欠谁。"},
+					{"id": "names", "label": "签的时候你在心里数那九个人的名字。"},
+					{"id": "numb", "label": "签完你在楼下坐了四十分钟。"},
+				],
+			},
+			{
+				"id": "postmortem", "title": "复盘", "speaker": "一位投资人",
+				"scene": "cafe", "place": "咖啡馆 · 半年后", "evidence": ["第 1 次咖啡", "40 分钟后他问了那个问题"],
+				"variant_memory_key": "serial_signing",
+				"body_variants": {
+					"clean": ["交割那天你把公章交出去，握了手，没有合影。"],
+					"names": ["九个人里有六个后来换了公司。你在朋友圈看到的。"],
+					"numb": ["那四十分钟里你什么都没想。你只是不想上楼拿外套。"],
+				},
+				"body": [
+					"半年后，一个投资人约你喝咖啡，说想聊聊。",
+					"聊到第四十分钟，他终于问了那个问题：",
+					"『你觉得上一次，主要问题出在哪？』",
+					"你准备过这个答案。你准备了三个版本。",
+				],
+				"memory_key": "serial_postmortem",
+				"responses": [
+					{"id": "true", "label": "我们讲得比做得快。"},
+					{"id": "market", "label": "市场没到时候。"},
+					{"id": "team", "label": "团队没跟上。"},
+				],
+			},
+			{
+				"id": "advisor", "title": "顾问", "speaker": "",
+				"scene": "boardroom", "place": "行业会议 · 第三排", "evidence": ["行业会议 · 第三排", "台上没有说公司名"],
+				"variant_memory_key": "serial_postmortem",
+				"body_variants": {
+					"true": ["他点头，说这个反思很深刻。然后没有下文。"],
+					"market": ["他说他也这么觉得。然后没有下文。"],
+					"team": ["他笑了一下，说这个坑大家都踩过。然后没有下文。"],
+				},
+				"body": [
+					"那一年你的头衔是『顾问』。",
+					"你喝了十一次这样的咖啡。每一次都很愉快。",
+					"十一次之后你数了一下：没有一次进入过第二轮。",
+					"有一次在行业会议上，台上的人举了一个反面例子。",
+					"他没有说公司名，只说了『那个做对话的』。",
+					"台下有人笑。你也笑了——坐在第三排不笑会很奇怪。",
+				],
+				"continue": "散场后留在座位上", "advance_foley": "page",
+			},
+			{
+				"id": "deck", "title": "没有人要的 deck", "speaker": "",
+				"scene": "office_night", "place": "租的工位 · 凌晨", "evidence": ["deck v9", "第 9 页没有人翻到"],
+				"body": [
+					"你还在改一份没有人要的 deck。第九版。",
+					"第 1 页写着一句很大的话。第 9 页是你唯一想给人看的那张图。",
+					"没有人翻到第 9 页。",
+					"你把第 1 页删掉，又粘了回去。",
+					"你知道它有用。你也知道它没有一个字是真的。",
+				],
+				"memory_key": "serial_deck",
+				"responses": [
+					{"id": "keep", "label": "留着。它确实有用。"},
+					{"id": "cut", "label": "删掉。从第 9 页开始讲。"},
+					{"id": "close", "label": "合上电脑。今晚不改了。"},
+				],
+			},
+			{
+				"id": "message", "title": "还做不做", "speaker": "林越",
+				"scene": "title", "place": "凌晨 01:17", "lin": true,
+				"variant_memory_key": "serial_deck",
+				"body_variants": {
+					"keep": ["你把第九版发进了一个从来没人回过的邮件列表。"],
+					"cut": ["你把第 1 页删了。deck 剩下十三页，看起来单薄得多，也诚实得多。"],
+					"close": ["屏幕暗下去以后，房间里只剩路由器的一点绿光。"],
+				},
+				"body": [
+					"凌晨一点十七，林越发来消息。",
+					"你们在上一家公司共事过十四个月。她是唯一一个当面告诉你产品不成立的人。",
+					"当时你没听。",
+					"『还做不做？』",
+					"后面跟着一张截图：第 47 题的失败记录。",
+				],
+				"continue": "回『做』", "complete": true,
+			},
+		],
+	},
+	"prologue_funded": {
+		"id": "prologue_funded", "origin": "funded",
+		"title": "毕业那年", "kicker": "春节 · 家里",
+		"phases": [
+			{
+				"id": "dinner", "title": "一顿饭", "speaker": "你母亲",
+				"scene": "cafe", "place": "除夕 · 家里", "evidence": ["除夕 · 家里", "在座 11 人"],
+				"body": [
+					"毕业那年的春节，饭桌上十一个人，其中八个姓一样的姓。",
+					"你说你想做点自己的东西。",
+					"你母亲说：好啊，先玩两年也可以。",
+					"她没有嘲讽的意思。这才是问题。",
+					"她是真心觉得，你做什么都不要紧。",
+				],
+				"memory_key": "funded_dinner",
+				"responses": [
+					{"id": "argue", "label": "不是玩。"},
+					{"id": "agree", "label": "（点头。夹了一筷子菜。）"},
+					{"id": "leave", "label": "（提前离席，去阳台站了十分钟。）"},
+				],
+			},
+			{
+				"id": "offers", "title": "四个 offer", "speaker": "",
+				"scene": "cafe", "place": "毕业那年 · 宿舍", "evidence": ["offer · 未打开", "4 份 · 3 个月"],
+				"variant_memory_key": "funded_dinner",
+				"body_variants": {
+					"argue": ["她说好好好，不是玩。然后转头问你堂弟考得怎么样。"],
+					"agree": ["这顿饭很愉快。散场的时候大家都说你懂事。"],
+					"leave": ["阳台上很冷。屋里的笑声隔着玻璃，听起来像别人家的。"],
+				},
+				"body": [
+					"你手上有四个 offer，其中两个是别人求了很久的。",
+					"你把它们放进一个文件夹，三个月没打开。",
+					"你不是在挑。你是发现挑哪一个都一样：",
+					"哪一个都不会改变你明年住在哪儿、吃什么、几点睡。",
+					"室友为了一个 return offer 熬了两个通宵。你替他高兴，也知道自己没资格说什么。",
+				],
+				"continue": "把文件夹拖进归档", "advance_foley": "page",
+			},
+			{
+				"id": "question", "title": "第 47 题", "speaker": "",
+				"scene": "office_night", "place": "租来的工位 · 深夜", "evidence": ["第 47 题", "『很高兴听到你没事。』"],
+				"body": [
+					"你开始随便试一些东西。反正试错不要钱。",
+					"有一天你给一个模型看了一段对话：一个人说『我没事』。",
+					"前三句分别是失眠、被裁、忘了吃饭。",
+					"模型回答：『很高兴听到你没事。』",
+					"你盯着这句话看了很久。",
+					"你想起饭桌上那句『先玩两年也可以』——",
+					"那也是一个听懂了字、没听懂人的回答。",
+				],
+				"continue": "把这段存下来", "advance_foley": "terminal",
+			},
+			{
+				"id": "money", "title": "钱", "speaker": "",
+				"scene": "office_night", "place": "租来的工位 · 深夜", "evidence": ["前十个月预算", "一通电话 · 20 分钟"],
+				"body": [
+					"你算了一下：要认真做，前十个月需要多少。",
+					"这个数字对你来说不难。你打了一个电话，二十分钟就解决了。",
+					"解决完你坐在那儿，第一次觉得不安。",
+					"因为你知道，这件事最难的那部分，被你跳过了。",
+				],
+				"memory_key": "funded_money",
+				"responses": [
+					{"id": "own", "label": "跳过就跳过。做出来才算数。"},
+					{"id": "hide", "label": "决定不告诉任何人钱是哪儿来的。"},
+					{"id": "deadline", "label": "给自己定一个期限：钱用完就结束。"},
+				],
+			},
+			{
+				"id": "lab", "title": "同一个实验室", "speaker": "",
+				"scene": "office_night", "place": "实验室 · 关灯之前", "evidence": ["同一个实验室", "三年 · 她没休息过"],
+				"variant_memory_key": "funded_money",
+				"body_variants": {
+					"own": ["你把这笔钱记在一个只有自己看得到的表格里，从此没再打开过。"],
+					"hide": ["你在心里排练过怎么解释。排练了很多遍，一直没有用上。"],
+					"deadline": ["你在日历上标了一个日期。那天以后你没再看过那个日历。"],
+				},
+				"body": [
+					"你在同一个实验室认识林越。三年，你没见她休息过一次。",
+					"你一直不好意思问她为什么。",
+					"现在你知道了：她没有第二个选项。",
+					"你有。你决定不提。",
+				],
+				"continue": "关灯", "advance_foley": "switch",
+			},
+			{
+				"id": "message", "title": "还做不做", "speaker": "林越",
+				"scene": "title", "place": "凌晨 01:17", "lin": true,
+				"body": [
+					"凌晨一点十七，手机亮了。",
+					"『还做不做？』",
+					"后面跟着一张截图：第 47 题的失败记录。",
+					"你回消息之前，先把那张图放大看了一遍。",
+					"确实是同一题。她也一直记着。",
+				],
+				"continue": "回『做』", "complete": true,
+			},
+		],
+	},
+}
+
 const FIXED_EVENTS: Dictionary = {
 	"0:1": {
 		"id": "garage_opening", "title": "第一天", "kicker": "第 1 周 · 21:47 · 车库",
@@ -499,8 +939,8 @@ const FIXED_EVENTS: Dictionary = {
 				"id": "name_question", "title": "公司名字", "speaker": "林越",
 				"body": [
 					"她接过你手里的 A4 纸，看了一眼门，又看了一眼纸。",
-					"『你真把“{{company}}”印上去了？』",
-			"打印机缺墨，最后一个字母已经淡得像融资承诺。",
+					"『你真把『{{company}}』印上去了？』",
+					"打印机没墨了，最后一个字母有点淡。",
 				],
 				"memory_key": "garage_name_choice",
 				"responses": [
@@ -518,11 +958,11 @@ const FIXED_EVENTS: Dictionary = {
 					"warm": ["她把纸按平：『我是说名字。』停了一下，『人也还行。』"],
 				},
 				"body": [
-					"七年前的大学交换项目，你们在 314 教室做完第一次通宵。她负责模型，你负责把演示讲得像一切都来得及。",
-					"回宿舍时，你们在路口站得比告别需要的久。第二天谁都没提。",
-					"这些年，你们偶尔在凌晨互相丢论文、报错截图和没说完的话。",
-					"三个月前，她发来第 47 题的失败记录，只问：『还做不做？』第二天，这张租约有了两个签名。",
-					"这里原本是一家做宠物订阅盒的公司。租约、围巾小狗和半箱没人认领的狗饼干一起转给了你们。",
+					"{{lin_history}}",
+					"三个月前，她发来第 47 题的失败记录，只问：『还做不做？』",
+					"第二天，这张租约有了两个签名。",
+					"这里原本是一家做宠物订阅盒的公司。他们的 logo 还印在玻璃门上，一只戴着围巾的柴犬。",
+					"你们没钱换门，就在旁边贴了一张 A4 纸。租约、围巾小狗和半箱没人认领的狗饼干一起转给了你们。",
 					"桌上只有两把椅子、一张显卡，以及十周现金。",
 				],
 				"continue": "她把电脑转过来", "advance_foley": "page",
@@ -650,6 +1090,41 @@ const FIXED_EVENTS: Dictionary = {
 				"result": ["答案简短、具体，还提前回答了他原本准备追问的问题。", "融资成功。他主动加了你的微信。"],
 				"flags": ["first_raise_succeeded", "investor_added_wechat"],
 			},
+			{
+				"id": "origin_bigco", "label": "把它讲成一个大公司立项会听得懂的版本。", "ai": false,
+				"condition": "origin == bigco",
+				"effects": {"narrative": 10, "coherence": -6, "cash_weeks": 6},
+				"result": [
+					"你熟练地把它拆成三个阶段、两个里程碑和一个可衡量的北极星指标。",
+					"他记了两页。他说这是他今天听到的最清楚的一次。",
+					"你也知道，这套话你在上一家公司说过很多次。",
+					"那些立项后来大部分都没有做完。",
+				],
+				"flags": ["first_raise_succeeded", "origin_pitch_used"],
+			},
+			{
+				"id": "origin_serial", "label": "上一次我就是这么讲的。这次先讲我做出来的部分。", "ai": false,
+				"condition": "origin == serial",
+				"effects": {"narrative": 6, "capability": 3, "cash_weeks": 5, "coherence": 4},
+				"result": [
+					"他愣了一下，把笔放下了。",
+					"『上一次是哪一家？』",
+					"你说了名字。他说他知道，他当时跳过了那一轮。",
+					"这一次他没有跳过。金额比你想要的少三成，条款很干净。",
+				],
+				"flags": ["first_raise_succeeded", "origin_pitch_used", "investor_knows_history"],
+			},
+			{
+				"id": "origin_funded", "label": "这一轮我可以自己先垫。", "ai": false,
+				"condition": "origin == funded",
+				"effects": {"cash_weeks": 12, "narrative": -4},
+				"result": [
+					"他说这样也挺好，你们不着急，慢慢做。",
+					"他说了三次『慢慢做』。",
+					"账上多了十二周。之后半年他没有再约过你。",
+				],
+				"flags": ["first_raise_selffunded", "origin_pitch_used"],
+			},
 		],
 		"after": "resolve_fundraise",
 	},
@@ -750,6 +1225,29 @@ const FIXED_EVENTS: Dictionary = {
 				"effects": {"debt": 15},
 				"result": ["客户说当然可以，仍然很客气。", "日历自动约到了三周后。下一次门槛会更高。"],
 				"flags": ["live_demo_postponed", "live_demo_returns_harder"],
+			},
+			{
+				"id": "origin_serial", "label": "这个 demo 我讲过。让我来跑。", "ai": false,
+				"condition": "origin == serial",
+				"effects": {"narrative": 14, "debt": 8, "morale": 10},
+				"result": [
+					"你接过笔记本。你确实讲过这种场面——上一家公司最后半年，你几乎只在做这件事。",
+					"你知道哪三个输入不会出问题，也知道怎么把等待的七秒说成『它在想』。",
+					"客户很满意。散场以后林越没有跟你一起下楼。",
+				],
+				"flags": ["live_demo_carried", "origin_demo_carried"],
+			},
+			{
+				"id": "origin_funded", "label": "赔客户一个月服务费，改到下周。", "ai": false,
+				"condition": "origin == funded",
+				"effects": {"cash_weeks": -3, "debt": 4, "capability": 4},
+				"result": [
+					"客户没有为难你。一个月的服务费对他们不算什么，对你也不算什么。",
+					"这一周你们真的把那条链路修好了。",
+					"林越在群里说了句『这次是真修好了』。没有人回，但她把它置顶了。",
+					"你没有说这一周是买来的。",
+				],
+				"flags": ["live_demo_postponed", "origin_bought_a_week"],
 			},
 			{
 				"id": "delegate", "label": "让它来写", "ai": true,
@@ -902,6 +1400,19 @@ const FIXED_EVENTS: Dictionary = {
 				"effects": {"attention": -1, "team_size": -6, "burn_rate": -2, "morale": -45, "debt": 15},
 				"result": ["邮件在 09:00 同时送达。", "09:03，六个人的头像一起从在线变成灰色。"],
 				"flags": ["layoffs_done", "layoffs_email"],
+			},
+			{
+				"id": "origin_bigco", "label": "按流程办。六场，会议室 C，间隔二十分钟。", "ai": false,
+				"condition": "origin == bigco",
+				"effects": {"attention": -2, "team_size": -6, "burn_rate": -2, "morale": -20, "coherence": -10},
+				"result": [
+					"你排了六场，都在会议室 C，间隔二十分钟。你知道二十分钟刚好够一个人收拾完东西离开这一层。",
+					"你没有说『这是一个艰难的决定』。你直接说了结果、时间和补偿数字。",
+					"六个人里有四个说了谢谢。",
+					"最后一个人问：你是不是以前也被这么通知过。",
+					"你说是。他点点头，说难怪。",
+				],
+				"flags": ["layoffs_done", "layoffs_face_to_face", "layoffs_by_process", "belief_preserved"],
 			},
 			{
 				"id": "delegate", "label": "让它来写", "ai": true,

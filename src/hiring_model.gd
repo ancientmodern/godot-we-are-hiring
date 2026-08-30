@@ -188,6 +188,24 @@ func _init() -> void:
 	reset()
 
 
+## The founder's origin. It is fixed at the first sheet of the dossier and never
+## changes again, because it is not a build — it is where you were standing.
+## Its effects are permanent by construction: authored options that exist for
+## the whole campaign, and one weekly rule. A head start in a starting number
+## would be gone by week ten and would then, correctly, be read as nothing.
+var origin_id := HiringContent.DEFAULT_ORIGIN
+
+
+func origin() -> Dictionary:
+	return HiringContent.get_origin(origin_id)
+
+
+func origin_weekly_burn_multiplier() -> float:
+	# The one origin that changes an ongoing number rather than an option list.
+	# It compounds across forty-five weeks instead of washing out by week ten.
+	return 0.85 if origin_id == "funded" else 1.0
+
+
 func reset(new_company_name: String = DEFAULT_COMPANY_NAME, is_second_run: bool = false) -> void:
 	company_name = new_company_name.strip_edges()
 	if company_name.is_empty():
@@ -214,6 +232,8 @@ func reset(new_company_name: String = DEFAULT_COMPANY_NAME, is_second_run: bool 
 	fulfillment_events = 0
 	rng_state = RNG_INITIAL_STATE
 	second_run = is_second_run
+	if not HiringContent.ORIGINS.has(origin_id):
+		origin_id = HiringContent.DEFAULT_ORIGIN
 	business.reset()
 	operations.reset(104729 + (1 if second_run else 0))
 	employees = [
@@ -580,7 +600,7 @@ func end_week() -> Dictionary:
 		debt += debt_delta
 	debt = clampf(debt, 0.0, 999.0)
 
-	var burn := maxf(MIN_WEEKLY_BURN, 1.0 + salary_burn_modifier)
+	var burn := maxf(MIN_WEEKLY_BURN, (1.0 + salary_burn_modifier) * origin_weekly_burn_multiplier())
 	if not uses_authoritative_financial_ledger():
 		cash_weeks = maxf(0.0, cash_weeks - burn)
 	_update_fulfillment_pressure()
@@ -734,7 +754,8 @@ func public_state() -> Dictionary:
 		"chapter_weeks": int(chapter_data["weeks"]),
 		"total_week": total_week,
 		"model_name": str(chapter_data["model_name"]),
-		"runway_weeks": business.runway_weeks() if uses_authoritative_financial_ledger() else maxi(0, int(ceil(cash_weeks / maxf(MIN_WEEKLY_BURN, 1.0 + salary_burn_modifier)))),
+		"runway_weeks": business.runway_weeks() if uses_authoritative_financial_ledger() else maxi(0, int(ceil(cash_weeks / maxf(MIN_WEEKLY_BURN, (1.0 + salary_burn_modifier) * origin_weekly_burn_multiplier())))),
+		"origin_id": origin_id,
 		"compute": int(round(compute)),
 		"narrative": int(round(narrative)),
 		"capability": int(round(capability)),
@@ -791,6 +812,7 @@ func to_save() -> Dictionary:
 	return {
 		"save_version": SAVE_VERSION,
 		"company_name": company_name,
+		"origin_id": origin_id,
 		"chapter": chapter,
 		"week_in_chapter": week_in_chapter,
 		"total_week": total_week,
@@ -830,6 +852,10 @@ func to_save() -> Dictionary:
 func from_save(data: Dictionary) -> bool:
 	if int(data.get("save_version", -1)) != SAVE_VERSION:
 		return false
+	# Saves written before origins existed load as the default origin, which is
+	# numerically identical to the campaign they were recorded in.
+	var saved_origin := str(data.get("origin_id", HiringContent.DEFAULT_ORIGIN))
+	origin_id = saved_origin if HiringContent.ORIGINS.has(saved_origin) else HiringContent.DEFAULT_ORIGIN
 	reset(str(data.get("company_name", DEFAULT_COMPANY_NAME)), bool(data.get("second_run", false)))
 	chapter = clampi(int(data.get("chapter", 0)), 0, CHAPTERS.size() - 1)
 	week_in_chapter = clampi(int(data.get("week_in_chapter", 1)), 1, int(CHAPTERS[chapter]["weeks"]))

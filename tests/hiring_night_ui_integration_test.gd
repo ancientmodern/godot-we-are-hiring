@@ -334,7 +334,10 @@ func _test_ui_save_round_trip() -> void:
 	ui.second_run_unlocked = false
 	ui.name_edit.text = "Night State Save Contract"
 	ui.call("_start_new_company")
-	if not ui.current_event.is_empty():
+	# The origin prologue and the garage are two authored scenes; step past both.
+	for _scene in 3:
+		if ui.current_event.is_empty():
+			break
 		ui.call("_close_event")
 	var core = _open_night(ui, "2")
 	if core != null and ui.has_method(ARRIVAL_METHOD):
