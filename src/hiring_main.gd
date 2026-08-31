@@ -5691,10 +5691,13 @@ func _draw_office_debt_indicator(rect: Rect2) -> void:
 	var status_names := ["尚可", "有点乱", "没人收拾", "流程正常", "完全正常"]
 	_draw_display_text(status_names[clampi(tier, 0, 4)], rect.position + Vector2(6, 62), TYPE_SECTION, COLD_05)
 	_draw_text("留下的不是灰尘，是流程。", rect.position + Vector2(6, 86), TYPE_META, COLD_40)
+	# A pile of unclaimed paper seen edge-on. Drawn as four overlapping faces it
+	# stacked into one opaque slab against the bottom of the rail, which reads as
+	# a rendering fault rather than as paper nobody has picked up.
 	for i in tier:
-		var sheet := Rect2(rect.position + Vector2(6 + i * 6, 104 + i * 9), Vector2(120 - i * 8, 30))
-		draw_rect(sheet, Color(WARM_20, 0.09 + i * 0.04))
-		draw_rect(sheet, Color(WARM_40, 0.20 + i * 0.05), false, 1.0)
+		var slip := Rect2(rect.position + Vector2(6 + i * 4, 108 + i * 10), Vector2(116 - i * 9, 4))
+		draw_rect(slip, Color(WARM_20, 0.16 + i * 0.05))
+		draw_line(slip.position + Vector2(0, 4), slip.position + Vector2(slip.size.x, 4), Color(WARM_40, 0.26), 1.0)
 
 
 func _draw_toast() -> void:
