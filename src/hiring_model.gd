@@ -756,6 +756,7 @@ func public_state() -> Dictionary:
 		"model_name": str(chapter_data["model_name"]),
 		"runway_weeks": business.runway_weeks() if uses_authoritative_financial_ledger() else maxi(0, int(ceil(cash_weeks / maxf(MIN_WEEKLY_BURN, (1.0 + salary_burn_modifier) * origin_weekly_burn_multiplier())))),
 		"origin_id": origin_id,
+		"origin_subsidy_week_usd": int(memory.get("origin_subsidy_week_usd", 0)),
 		"compute": int(round(compute)),
 		"narrative": int(round(narrative)),
 		"capability": int(round(capability)),
@@ -1716,6 +1717,7 @@ func _tick_company_systems() -> void:
 		"settle_operations": true,
 	})
 	_tick_industry_ambient_echo()
+	_apply_origin_subsidy()
 	if uses_authoritative_financial_ledger():
 		_sync_legacy_runway_from_business()
 	memory["last_operations_tick"] = operations_tick.duplicate(true)
@@ -1734,6 +1736,34 @@ func _tick_company_systems() -> void:
 		"joins": joined_names.size(),
 		"business": business_tick.duplicate(true),
 	})
+
+
+func _apply_origin_subsidy() -> void:
+	# The 不用担心钱 rule has to survive the moment the authoritative ledger takes
+	# over from the legacy cash counter, or it becomes exactly the head start that
+	# levelling erases — the failure this whole design exists to avoid. The legacy
+	# path scales the weekly burn directly; on the ledger the founder's own money
+	# arrives as a cash line, so operating costs stay honest and the subsidy is
+	# auditable in the journal rather than hidden inside payroll.
+	if origin_id != "funded" or not uses_authoritative_financial_ledger():
+		return
+	var share := 1.0 - origin_weekly_burn_multiplier()
+	var subsidy := int(round(float(business.weekly_burn_usd()) * share))
+	if subsidy <= 0:
+		return
+	var result: Dictionary = business.record_cash_adjustment(
+		"origin_subsidy:%d" % total_week,
+		"founder_subsidy",
+		subsidy,
+		{"origin": origin_id, "week": total_week}
+	)
+	if not bool(result.get("ok", false)):
+		return
+	memory["origin_subsidy_total_usd"] = int(memory.get("origin_subsidy_total_usd", 0)) + subsidy
+	memory["origin_subsidy_week_usd"] = subsidy
+	if not bool(flags.get("origin_subsidy_seen", false)):
+		flags["origin_subsidy_seen"] = true
+		memory["origin_subsidy_first_week"] = total_week
 
 
 func _tick_industry_ambient_echo() -> void:

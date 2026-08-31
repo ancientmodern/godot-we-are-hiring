@@ -1,6 +1,7 @@
 extends SceneTree
 
 const HiringContentScript = preload("res://src/hiring_content.gd")
+const HiringMainScript = preload("res://src/hiring_main.gd")
 
 const OUTPUT_DIR := "res://artifacts/screenshots"
 const NON_MANIFEST_ARCHIVE_DIR := "res://artifacts/screenshots/archive/non_manifest"
@@ -137,6 +138,27 @@ func _capture_origin_prologue(game, origin_id: String, phase_id: String, stem: S
 	await _settle_frames(8)
 	_capture(stem)
 
+func _report_text_fit() -> void:
+	HiringMainScript.text_fit_probe_active = false
+	var worst: Dictionary = {}
+	for entry_value in HiringMainScript.text_fit_overflows:
+		var entry: Dictionary = entry_value
+		var key := str(entry["text"])
+		if not worst.has(key) or float(entry["overflow"]) > float(Dictionary(worst[key])["overflow"]):
+			worst[key] = entry
+	var rows: Array = worst.values()
+	rows.sort_custom(func(a, b): return float(Dictionary(a)["overflow"]) > float(Dictionary(b)["overflow"]))
+	print("TEXT_FIT_OVERFLOWS: %d distinct strings" % rows.size())
+	for row_value in rows:
+		var row: Dictionary = row_value
+		print("TEXT_FIT: +%.0fpx size=%d w=%.0f | %s" % [float(row["overflow"]), int(row["size"]), float(row["allowed"]), str(row["text"])])
+	if not rows.is_empty():
+		# A clipped label is invisible to a screenshot contract and to a reader who
+		# never saw the missing half, so the capture gate refuses to be green.
+		capture_failed = true
+		push_error("HIRING_VISUAL_CAPTURE_FAILED: %d string(s) do not fit the width they are drawn with" % rows.size())
+
+
 func _capture_sequence() -> void:
 	_backup_user_files()
 	_validate_capture_manifest()
@@ -151,6 +173,11 @@ func _capture_sequence() -> void:
 	game.save_path_override = CAPTURE_SAVE_PATH
 	game.meta_path_override = CAPTURE_META_PATH
 	root.add_child(game)
+	# Every capture below also acts as a text-fit probe: draw_string clips
+	# silently, so a label that no longer fits its column is invisible in a
+	# screenshot contract but not in this list.
+	HiringMainScript.text_fit_probe_active = true
+	HiringMainScript.text_fit_overflows.clear()
 	await _settle_frames(48)
 	_capture("onboarding")
 
@@ -651,6 +678,7 @@ func _capture_sequence() -> void:
 		if not captured_stems.has(expected_stem):
 			capture_failed = true
 			push_error("Visual harness did not capture manifest stem: " + expected_stem)
+	_report_text_fit()
 	if capture_failed:
 		push_error("HIRING_VISUAL_CAPTURE_FAILED")
 		quit(1)
