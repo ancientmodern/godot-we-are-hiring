@@ -30,7 +30,6 @@ const ART_NIGHT_POTHOS_HEALTHY_PATH := "res://assets/art/hiring_night_pothos_hea
 const ART_NIGHT_POTHOS_SEVERE_PATH := "res://assets/art/hiring_night_pothos_severe_v1.png"
 const ART_NIGHT_ROOM_D_PATH := "res://assets/art/hiring_night_room_d_v1.png"
 const UI_SCHEMA_VERSION := 3
-const DOCUMENT_LINES_PER_PAGE := 10
 const TEAM_ROWS_PER_PAGE := 9
 const ANNOUNCEMENTS_PER_PAGE := 6
 const UI_MIN_TARGET := 44.0
@@ -52,8 +51,6 @@ const RADIUS_CONTROL := 3.0
 const RADIUS_CARD := 2.0
 const RADIUS_MODAL := 8.0
 const MOTION_FAST := 0.12
-const MOTION_PANEL := 0.18
-const MOTION_STANDARD := 0.32
 
 # Content is never allowed to borrow contrast from the baked desk photograph.
 # These rectangles are the stable reading planes for the fixed 1280x720 canvas.
@@ -73,9 +70,7 @@ const TOAST_MAX_SAFE_RECT := Rect2(400, 16, 480, 48)
 const BG := Color("#0b171d")
 const SURFACE := Color("#e9ebe5")
 const READING_PAPER := Color("#edf0e9")
-const READING_PAPER_ALT := Color("#e4e9e4")
 const SURFACE_DARK := Color("#0b171d")
-const SIDEBAR := Color("#173039")
 const SIDEBAR_SURFACE := Color("#0d1e25")
 const INK := Color("#17252a")
 const MUTED := Color("#465b63")
@@ -92,8 +87,6 @@ const DISABLED_BG := Color("#e2e6e2")
 const DISABLED_TEXT := Color("#586864")
 const SCRIM := Color(0.031, 0.075, 0.098, 0.84)
 const HUMAN_PAPER := Color("#e6d4b6")
-const NIGHT_BG := Color("#081319")
-const NIGHT_PANEL := Color("#102127")
 const NIGHT_TEXT := Color("#dce7e8")
 const NIGHT_MUTED := Color("#8fa2a8")
 const TERMINAL := Color("#071319")
@@ -114,7 +107,6 @@ const COLD_50 := Color("#6d7f80")
 const COLD_60 := Color("#52666f")
 const COLD_70 := Color("#35505a")
 const COLD_80 := Color("#1d3540")
-const COLD_90 := Color("#12262e")
 const COLD_95 := Color("#0b171d")
 const COLD_99 := Color("#071319")
 const WARM_05 := Color("#f4efe4")
@@ -2178,33 +2170,6 @@ func _choice_condition_met(expression: String) -> bool:
 	return true
 
 
-func _apply_event_choice_effects(event_id: String, effects: Dictionary) -> void:
-	var additive := effects.duplicate(true)
-	if int(additive.get("narrative_set_to_capability", 0)) != 0:
-		model.narrative = float(model.capability)
-	additive.erase("narrative_set_to_capability")
-	if additive.has("cash_percent"):
-		model.cash_weeks = maxf(0.0, float(model.cash_weeks) * (1.0 + float(additive["cash_percent"]) / 100.0))
-	additive.erase("cash_percent")
-	if additive.has("team_size"):
-		var team_delta := int(additive["team_size"])
-		if team_delta < 0:
-			_remove_employee_count(abs(team_delta), "fixed_event")
-		elif team_delta > 0:
-			_add_employee_count(team_delta)
-	additive.erase("team_size")
-	if additive.has("burn_rate"):
-		model.salary_burn_modifier = maxf(0.0, float(model.salary_burn_modifier) + float(additive["burn_rate"]) * 0.25)
-	additive.erase("burn_rate")
-	var belief_delta = additive.get("belief", null)
-	var belief_set = additive.get("belief_set", null)
-	if event_id.begins_with("lin_scene") or event_id == "lin_last_visit":
-		additive.erase("belief")
-		additive.erase("belief_set")
-		_update_lin_belief(belief_delta, belief_set)
-	model.apply_effects(additive)
-
-
 func _update_lin_belief(delta_value, set_value) -> void:
 	for employee in model.employees:
 		if str(employee.get("id", "")) != "lin_yue":
@@ -2216,82 +2181,6 @@ func _update_lin_belief(delta_value, set_value) -> void:
 		if bool(model.flags.get("lin_belief_locked_15", false)):
 			employee["belief"] = minf(15.0, float(employee["belief"]))
 		break
-
-
-func _apply_event_after(event: Dictionary, choice_id: String = "") -> void:
-	var directive := str(event.get("after", ""))
-	if directive.is_empty():
-		return
-	model.flags["after_%s" % directive.replace(":", "_").replace(",", "_")] = true
-	if directive.begins_with("effects:"):
-		var effects: Dictionary = {}
-		for assignment in directive.trim_prefix("effects:").split(","):
-			var parts := assignment.split("=")
-			if parts.size() == 2:
-				effects[str(parts[0])] = float(parts[1])
-		model.apply_effects(effects)
-		return
-	if directive.begins_with("remember:"):
-		model.memory[directive.trim_prefix("remember:")] = true
-		return
-	if directive.begins_with("set_flag:"):
-		model.flags[directive.trim_prefix("set_flag:")] = true
-		return
-	if directive.begins_with("set_office:"):
-		model.flags["office_%s" % directive.trim_prefix("set_office:")] = true
-		return
-	if directive.begins_with("unlock:"):
-		for action_id in directive.trim_prefix("unlock:").split(","):
-			model.flags["unlocked_%s" % action_id] = true
-		return
-	if directive.begins_with("queue:"):
-		model.flags["queued_%s" % directive.trim_prefix("queue:")] = true
-		return
-	if directive.begins_with("night_shift:"):
-		pending_night_id = directive.trim_prefix("night_shift:")
-		if pending_night_id == "2" and bool(model.flags.get("lin_will_leave", false)):
-			_remove_employee_by_id("lin_yue", "lin_scene_4")
-		return
-	if directive.begins_with("add_employee:"):
-		_add_content_employee(directive.trim_prefix("add_employee:"))
-		return
-	if directive.begins_with("open_intranet:"):
-		model.flags["intranet_%s_available" % directive.trim_prefix("open_intranet:")] = true
-		return
-	match directive:
-		"fundraise_by_narrative":
-			var cash_gain := 12.0 if model.narrative >= 75.0 else (8.0 if model.narrative >= 55.0 else (5.0 if model.narrative >= 35.0 else 2.0))
-			model.apply_effects({"cash_weeks": cash_gain})
-			model.memory["last_financing_narrative"] = model.narrative
-		"conditional_debt_event":
-			if model.debt >= 30.0:
-				model.apply_effects({"narrative": -4.0, "coherence": -2.0})
-				model.flags["second_collection_triggered"] = true
-		"debt_scaled_reputation_hit", "debt_scaled_event":
-			var severity := clampf(floor(float(model.debt) / 15.0), 0.0, 8.0)
-			if severity > 0.0:
-				model.apply_effects({"narrative": -severity, "coherence": -severity * 0.5})
-		"mark_witnesses:demo_edit":
-			if choice_id != "run_live":
-				model.call("_add_witness_to_all", "demo_fake")
-		"employee_intent_to_leave":
-			model.flags["employee_intent_to_leave"] = true
-		"add_elevator_floor":
-			model.flags["extra_elevator_floor"] = true
-		"unlock_room_d":
-			model.flags["meeting_room_d_available"] = true
-		"author_stage:3":
-			model.author_weight = maxf(40.0, float(model.author_weight))
-		"author_stage:5":
-			model.author_weight = maxf(90.0, float(model.author_weight))
-		"remove_laid_off_employees":
-			model.flags["layoff_execution_complete"] = true
-		"resolve_board":
-			model.flags["board_resolved"] = true
-		"evaluate_ending":
-			model.flags["ending_gate_seen"] = true
-		"continue_ng_plus":
-			model.flags["second_time_opening_seen"] = true
 
 
 func _has_employee(employee_id: String) -> bool:
@@ -2671,20 +2560,6 @@ func _choose_event_option(index: int) -> void:
 	result_return = "resume_finish_week" if resume_finish_week else "queue_week_content"
 	_change_screen(Screen.ACTION_RESULT)
 	_save_game()
-
-
-func _resolve_conditional_choice(choice: Dictionary) -> Dictionary:
-	# Fixed content is normalized by _prepare_event(). Keep support for the older
-	# dictionary condition schema for saves produced during development.
-	if choice.get("condition") is Dictionary:
-		var condition: Dictionary = choice["condition"]
-		var stat := str(condition.get("stat", "capability"))
-		var threshold := float(condition.get("gte", 0.0))
-		var raw_value = model.get(stat)
-		var value := float(raw_value) if raw_value != null else 0.0
-		var branch = choice.get("success", choice) if value >= threshold else choice.get("failure", choice)
-		return branch if branch is Dictionary else choice
-	return choice
 
 
 func _close_event() -> void:
@@ -3204,7 +3079,8 @@ func _draw_origin_select() -> void:
 	draw_set_transform(Vector2(0, (1.0 - reveal) * 14.0))
 	_draw_text("人事档案", Vector2(326, 118), TYPE_META, GREEN)
 	_draw_display_text("你从哪儿来", Vector2(322, 176), TYPE_HERO, INK)
-	_draw_text("这一页决定开局前发生过什么，也决定后面有些话你说得出口。", Vector2(326, 208), TYPE_LABEL, MUTED)
+	var origin_note := "这一次的过去不再重放。出身仍然决定后面有些话你说得出口。" if second_run_unlocked else "这一页决定开局前发生过什么，也决定后面有些话你说得出口。"
+	_draw_text(origin_note, Vector2(326, 208), TYPE_LABEL, MUTED)
 	draw_line(Vector2(326, 228), Vector2(746, 228), RULE_STRONG, 1.0)
 	var ids := _origin_ids()
 	for i in ids.size():
@@ -4345,7 +4221,12 @@ func _draw_terminal() -> void:
 	# English here is what a founder actually types — lowercase, inline, mid-
 	# sentence. Small-caps English captions on every field were costume.
 	_draw_operating_metric(Vector2(inner.position.x, metrics_top), metric_width, "可用现金", _format_usd_compact(int(ledger.get("cash_usd", 0))), "已结算", COLD_60)
-	_draw_operating_metric(Vector2(inner.position.x + metric_width, metrics_top), metric_width, "净周消耗", _format_usd_compact(-int(ledger.get("weekly_burn_usd", 0))), "每周 burn", RED if runway <= 6 else COLD_60)
+	# When the founder is quietly covering part of the run rate, the number that
+	# got smaller says who made it smaller. An advantage nobody can see is not an
+	# advantage the player gets to feel anything about.
+	var subsidy_usd := int(state.get("origin_subsidy_week_usd", 0))
+	var burn_detail := "每周 burn · 自付 %s" % _format_usd_compact(subsidy_usd) if subsidy_usd > 0 else "每周 burn"
+	_draw_operating_metric(Vector2(inner.position.x + metric_width, metrics_top), metric_width, "净周消耗", _format_usd_compact(-int(ledger.get("weekly_burn_usd", 0))), burn_detail, RED if runway <= 6 else COLD_60)
 	_draw_operating_metric(Vector2(inner.position.x + metric_width * 2.0, metrics_top), metric_width, "经常性收入", _format_usd_compact(int(ledger.get("mrr_usd", 0))), "ARR %s · %d 客户" % [_format_usd_compact(int(ledger.get("contracted_arr_usd", 0))), int(ledger.get("customer_count", 0))], COLD_60)
 	_draw_operating_metric(Vector2(inner.position.x + metric_width * 3.0, metrics_top), metric_width, "跑道", "自给" if runway >= 999 else "%d 周" % runway, "按当前 burn", RED if runway <= 6 else COLD_60)
 	_draw_operating_metric(Vector2(inner.position.x + metric_width * 4.0, metrics_top), metric_width, "创始人持股", "%.1f%%" % (float(founder_bp) / 100.0), "fully diluted", COLD_60)
@@ -4624,7 +4505,7 @@ func _draw_intranet() -> void:
 			_draw_panel(row_rect.grow(2.0), Color.TRANSPARENT, GREEN_BRIGHT, RADIUS_CONTROL + 2.0, 2.0)
 		_draw_display_text("%02d" % (i + 1), row_rect.position + Vector2(12, 24), TYPE_META, PAPER_GREEN if i == selected_document else MUTED)
 		_draw_text(str(doc.get("title", "文档")), row_rect.position + Vector2(43, 24), TYPE_LABEL, INK, HORIZONTAL_ALIGNMENT_LEFT, 191)
-		_draw_text(_document_meta(doc, ["type", "author"]), row_rect.position + Vector2(43, 45), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_LEFT, 191)
+		_draw_text(_fit_text(_document_meta(doc, ["type", "author"]), TYPE_META, 191.0), row_rect.position + Vector2(43, 45), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_LEFT, 191)
 		draw_line(Vector2(row_rect.position.x + 12, row_rect.end.y), Vector2(row_rect.end.x - 12, row_rect.end.y), RULE_SOFT, 1.0)
 	# The index tab on the authored leaf takes the colour of whoever wrote it.
 	draw_rect(Rect2(detail.position + Vector2(24, 0), Vector2(122, 3)), PAPER_BLUE if detail_machine_authored else AMBER)
@@ -5613,92 +5494,6 @@ func _draw_night_raster_visual(texture: Texture2D, object_id: String, rect: Rect
 		_draw_text(stage_text, rect.position + Vector2(14, rect.size.y - 16), 11, Color("#d7c894"))
 
 
-func _draw_night_whiteboard_visual(rect: Rect2, detail: bool) -> void:
-	var board := rect.grow(-3.0)
-	_draw_panel(board, Color("#d9ddd6"), Color("#5e6964"), 3.0, 1.0)
-	var dog := board.position + Vector2(board.size.x * 0.30, board.size.y * (0.38 if detail else 0.46))
-	var dog_scale := 1.55 if detail else 0.56
-	draw_circle(dog, 16.0 * dog_scale, Color("#a97952"))
-	draw_colored_polygon(PackedVector2Array([dog + Vector2(-14, -8) * dog_scale, dog + Vector2(-21, -25) * dog_scale, dog + Vector2(-4, -17) * dog_scale]), Color("#8a5e42"))
-	draw_colored_polygon(PackedVector2Array([dog + Vector2(14, -8) * dog_scale, dog + Vector2(21, -25) * dog_scale, dog + Vector2(4, -17) * dog_scale]), Color("#8a5e42"))
-	draw_circle(dog + Vector2(-6, -3) * dog_scale, 1.8 * dog_scale, Color("#202522"))
-	draw_circle(dog + Vector2(6, -3) * dog_scale, 1.8 * dog_scale, Color("#202522"))
-	draw_line(dog + Vector2(-16, 17) * dog_scale, dog + Vector2(18, 23) * dog_scale, AMBER, 5.0 * dog_scale, true)
-	if detail:
-		_draw_text("这不是我们的 logo。", board.position + Vector2(board.size.x * 0.53, 54), 10, Color("#48524d"))
-		_draw_text("现在是了。", board.position + Vector2(board.size.x * 0.53, 82), 10, GREEN)
-
-
-func _draw_night_plant_visual(rect: Rect2, detail: bool) -> void:
-	var visual := _night_visual_state("pothos")
-	var yellow_count := int(visual.get("yellow_leaves", 0))
-	var total := yellow_count + int(visual.get("green_leaves", 0))
-	var center := rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.72)
-	var radius := minf(rect.size.x, rect.size.y) * (0.28 if detail else 0.32)
-	draw_rect(Rect2(center + Vector2(-radius * 0.34, radius * 0.12), Vector2(radius * 0.68, radius * 0.58)), Color("#785f46"))
-	for i in total:
-		var angle := -PI * 0.88 + float(i) / maxf(1.0, float(total - 1)) * PI * 1.76
-		var stem_end := center + Vector2(cos(angle) * radius, sin(angle) * radius)
-		draw_line(center, stem_end, Color("#58705e"), 1.2 if detail else 1.0)
-		var leaf_color := Color("#a99a52") if i < yellow_count else Color("#4f8b61")
-		draw_circle(stem_end, 8.0 if detail else 3.4, leaf_color)
-	if detail:
-		var stage_text := "黄约 2 / 3 · 剩余绿得过分" if str(visual.get("stage", "")) == "two_thirds_yellow" else ("叶缘仍绿" if yellow_count == 0 else "黄叶正在自然增加")
-		_draw_text_centered(stage_text, Rect2(rect.position + Vector2(4, rect.size.y - 28), Vector2(rect.size.x - 8, 22)), 9, Color("#91a69b"), 3.0)
-
-
-func _draw_night_desk_visual(rect: Rect2, detail: bool) -> void:
-	var visual := _night_visual_state("window_desk")
-	var desk_y := rect.position.y + rect.size.y * 0.68
-	draw_rect(Rect2(rect.position + Vector2(rect.size.x * 0.08, rect.size.y * 0.66), Vector2(rect.size.x * 0.84, maxf(3.0, rect.size.y * 0.08))), Color("#6f6253"))
-	var monitor := Rect2(rect.position + Vector2(rect.size.x * 0.18, rect.size.y * 0.14), Vector2(rect.size.x * 0.43, rect.size.y * 0.36))
-	_draw_panel(monitor, Color("#182522"), Color("#4b5b54"), 3.0, 1.0)
-	var logo_x := fmod(_motion_clock() * 10.0, maxf(8.0, monitor.size.x - 18.0))
-	draw_circle(monitor.position + Vector2(9 + logo_x, monitor.size.y * 0.5), 3.0 if detail else 1.5, GREEN_BRIGHT)
-	var original := Vector2(rect.position.x + rect.size.x * 0.76, desk_y - rect.size.y * 0.09)
-	if bool(visual.get("cup_held", false)):
-		draw_circle(original, 8.0 if detail else 3.0, Color(0.75, 0.75, 0.68, 0.14))
-		var held := rect.position + Vector2(rect.size.x * 0.78, rect.size.y * 0.25 + sin(_motion_clock() * 2.4) * 3.0)
-		_draw_cup_icon(held, 1.0 if detail else 0.35, Color("#e4e3dc"), AMBER)
-		if detail:
-			_draw_text("杯在手里", held + Vector2(-34, 40), 9, Color("#91a69b"))
-	else:
-		var offset := Vector2(float(visual.get("cup_offset_px", 0)), 0.0)
-		if bool(visual.get("cup_replaced", false)):
-			draw_circle(original, 8.0 if detail else 3.0, Color(0.75, 0.75, 0.68, 0.18))
-			draw_line(original, original + offset, AMBER, 1.0)
-		_draw_cup_icon(original + offset, 0.72 if detail else 0.30, Color("#deded8"), AMBER)
-		if detail and bool(visual.get("cup_replaced", false)):
-			_draw_text("2 cm", original + offset + Vector2(-12, 31), 9, AMBER)
-	if detail:
-		_draw_text("第一届全员团建 · 2024", rect.position + Vector2(12, rect.size.y - 20), 9, Color("#91a69b"))
-
-
-func _draw_night_room_d_visual(rect: Rect2, detail: bool) -> void:
-	var visual := _night_visual_state("meeting_room_d")
-	var room := rect.grow(-3.0)
-	var light_on := bool(visual.get("light_on", false))
-	_draw_panel(room, Color("#172025") if light_on else Color("#111615"), Color("#53636a"), 3.0, 1.0)
-	var projector := room.position + Vector2(room.size.x * 0.23, room.size.y * 0.20)
-	draw_rect(Rect2(projector - Vector2(10, 5), Vector2(20, 10)), Color("#758388"))
-	if bool(visual.get("projector_blue", false)):
-		var pulse := 0.14 + (sin(_motion_clock() * 1.9) + 1.0) * 0.025
-		draw_colored_polygon(PackedVector2Array([projector + Vector2(10, 0), room.position + Vector2(room.size.x * 0.92, room.size.y * 0.19), room.position + Vector2(room.size.x * 0.92, room.size.y * 0.78)]), Color(0.28, 0.58, 0.82, pulse))
-	var board := Rect2(room.position + Vector2(room.size.x * 0.53, room.size.y * 0.22), Vector2(room.size.x * 0.35, room.size.y * 0.38))
-	_draw_panel(board, Color("#d7dcd9"), Color("#708079"), 2.0, 1.0)
-	if detail:
-		_draw_text_centered("下周同一时间。", board, 9, Color("#43514b"), 3.0)
-	var door_x := room.position.x + room.size.x * 0.13
-	if bool(visual.get("door_closed", false)):
-		draw_rect(Rect2(Vector2(door_x, room.position.y + room.size.y * 0.42), Vector2(room.size.x * 0.16, room.size.y * 0.48)), Color("#39443f"))
-	else:
-		draw_line(Vector2(door_x, room.position.y + room.size.y * 0.42), Vector2(door_x + room.size.x * 0.18, room.position.y + room.size.y * 0.88), Color("#66766f"), 3.0)
-	draw_circle(room.position + Vector2(room.size.x * 0.48, room.size.y * 0.12), 5.0 if detail else 2.0, Color("#e3e8d3") if light_on else Color("#39413d"))
-	if detail:
-		var status := "灯亮 · 投影待机蓝光" if light_on else "灯已关"
-		_draw_text(status, room.position + Vector2(10, room.size.y - 10), 9, Color("#7fa6ae") if light_on else Color("#66716c"))
-
-
 func _draw_night_terminal_visual(rect: Rect2) -> void:
 	var screen_rect := rect.grow(-4.0)
 	_draw_panel(screen_rect, Color("#0b110f"), Color("#496052"), 2.0, 1.0)
@@ -5833,12 +5628,6 @@ func _draw_art_background(texture: Texture2D, modulate: Color = Color.WHITE) -> 
 		draw_rect(Rect2(Vector2.ZERO, VIEW), BG)
 		return
 	draw_texture_rect(texture, Rect2(Vector2.ZERO, VIEW), false, modulate)
-
-
-func _workspace_scene_texture() -> Texture2D:
-	if model != null and int(model.chapter) <= 1 and model.employees.size() <= 4 and art_title != null:
-		return art_title
-	return art_office_day
 
 
 func _draw_texture_cover(texture: Texture2D, rect: Rect2, modulate: Color = Color.WHITE, anchor: Vector2 = Vector2(0.5, 0.5)) -> void:
@@ -6637,14 +6426,6 @@ func _close_window_curtain() -> void:
 	queue_redraw()
 
 
-func _night_for_current_week() -> Dictionary:
-	if int(model.chapter) == 2 and int(model.week_in_chapter) == 12:
-		return HiringContent.get_night_shift(1)
-	if int(model.chapter) == 3 and int(model.week_in_chapter) == 14:
-		return HiringContent.get_night_shift(2)
-	return {}
-
-
 func _night_complete() -> bool:
 	return night_interaction != null and night_interaction.can_leave()
 
@@ -6824,15 +6605,6 @@ func _action_name(action_id: String) -> String:
 	return str(_action_data(action_id).get("name", action_id))
 
 
-func _category_color(category: String) -> Color:
-	match category:
-		"叙事", "narrative": return AMBER
-		"能力", "capability": return BLUE
-		"团队", "team": return GREEN
-		"经营", "strategy": return BLUE
-		_: return COLD_60
-
-
 func _category_label(category: String) -> String:
 	match category:
 		"narrative": return "叙事"
@@ -6858,12 +6630,6 @@ func _model_private_name() -> String:
 	var chapter_data: Dictionary = content.chapter(int(model.chapter))
 	var nickname := str(chapter_data.get("model_nickname", chapter_data.get("nickname", "阿灯")))
 	return nickname if not nickname.is_empty() else "——"
-
-
-func _content_call(method: StringName, args: Array, fallback):
-	if content.has_method(method):
-		return content.callv(method, args)
-	return fallback
 
 
 func _screen_save_name(screen_value: int) -> String:
@@ -7200,18 +6966,69 @@ func _line_edit_style(fill: Color, border: Color, radius: int) -> StyleBoxFlat:
 	return box
 
 
+## Set by tests/hiring_text_fit_test.gd. Every single-line draw that is given a
+## width reports here when the glyphs do not fit, because `draw_string` clips
+## silently: raising a type ramp is exactly the change that turns a label that
+## just fit into a label that is missing its last two characters, and nothing in
+## a screenshot contract notices a word that ends early.
+static var text_fit_probe_active := false
+static var text_fit_overflows: Array[Dictionary] = []
+
+
+static func _record_text_overflow(text: String, needed: float, allowed: float, size: int) -> void:
+	text_fit_overflows.append({
+		"text": text,
+		"needed": needed,
+		"allowed": allowed,
+		"size": size,
+		"overflow": needed - allowed,
+	})
+
+
+func _fit_text(text: String, size: int, width: float, source_font: Font = null) -> String:
+	# draw_string clips silently at the width it is given, which ends a word
+	# without saying so. Where a field genuinely cannot promise its content will
+	# fit, it should end on an ellipsis the reader can recognise as an ellipsis.
+	var use_font: Font = source_font if source_font != null else font
+	if width <= 0.0 or text.is_empty() or use_font == null:
+		return text
+	var readable_size := maxi(TYPE_META, size)
+	if use_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, readable_size).x <= width:
+		return text
+	var ellipsis := "…"
+	var budget := width - use_font.get_string_size(ellipsis, HORIZONTAL_ALIGNMENT_LEFT, -1, readable_size).x
+	var kept := ""
+	for index in text.length():
+		var candidate := kept + text[index]
+		if use_font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, readable_size).x > budget:
+			break
+		kept = candidate
+	return (kept.strip_edges() + ellipsis) if not kept.is_empty() else ellipsis
+
+
+func _probe_text_fit(source_font: Font, text: String, size: int, width: float) -> void:
+	if not text_fit_probe_active or width <= 0.0 or text.is_empty():
+		return
+	var needed := source_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	if needed > width + 0.5:
+		_record_text_overflow(text, needed, width, size)
+
+
 func _draw_text(text: String, position: Vector2, size: int, color: Color, alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0) -> void:
 	var readable_size := maxi(12, size)
+	_probe_text_fit(font, text, readable_size, width)
 	draw_string(font, position, text, alignment, width, readable_size, color)
 
 
 func _draw_display_text(text: String, position: Vector2, size: int, color: Color, alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0) -> void:
 	var readable_size := maxi(12, size)
+	_probe_text_fit(font_display, text, readable_size, width)
 	draw_string(font_display, position, text, alignment, width, readable_size, color)
 
 
 func _draw_text_centered(text: String, rect: Rect2, size: int, color: Color, baseline_offset: float = 0.0) -> void:
 	var readable_size := maxi(12, size)
+	_probe_text_fit(font, text, readable_size, rect.size.x)
 	var baseline := rect.position.y + (rect.size.y + float(readable_size)) * 0.5 - 2.0 + baseline_offset
 	draw_string(font, Vector2(rect.position.x, baseline), text, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, readable_size, color)
 

@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_shared_past_is_reframed_not_duplicated()
 	_test_origin_survives_persistence()
 	_test_permanent_rule_does_not_wash_out()
+	_test_rule_survives_the_authoritative_ledger()
 	_test_authored_options_are_exclusive()
 	_test_every_origin_option_costs_something()
 
@@ -154,6 +155,48 @@ func _test_permanent_rule_does_not_wash_out() -> void:
 		plain.cash_weeks = maxf(0.0, plain.cash_weeks - maxf(HiringModel.MIN_WEEKLY_BURN, 1.0 * plain.origin_weekly_burn_multiplier()))
 		funded.cash_weeks = maxf(0.0, funded.cash_weeks - maxf(HiringModel.MIN_WEEKLY_BURN, 1.0 * funded.origin_weekly_burn_multiplier()))
 	_check(funded.cash_weeks - plain.cash_weeks >= 6.0, "forty-five weeks later the rule has compounded into most of a chapter (%.1f weeks)" % (funded.cash_weeks - plain.cash_weeks))
+
+
+func _test_rule_survives_the_authoritative_ledger() -> void:
+	# The previous case proves the arithmetic. This one proves the arithmetic is
+	# still the arithmetic the game runs: once an expansion action hands cash over
+	# to the business ledger, the weekly multiplier stops being consulted, and a
+	# rule that only lived there would silently disappear around chapter two.
+	var subsidised := 0
+	var plain_cash := 0
+	for origin_id in ["bigco", "funded"]:
+		var director = CampaignDirector.new()
+		director.start_company("Ledger Rule Labs", false)
+		var model = director.model
+		model.origin_id = str(origin_id)
+		model.flags["expansion_systems_unlocked"] = true
+		model.call("_activate_financial_ledger_authority")
+		_check(model.uses_authoritative_financial_ledger(), "%s reaches the authoritative ledger path" % origin_id)
+		var opening_cash := int(model.business.ledger.get("cash_usd", 0))
+		for week in 8:
+			model.total_week = week + 1
+			model.call("_apply_origin_subsidy")
+		var closing_cash := int(model.business.ledger.get("cash_usd", 0))
+		if str(origin_id) == "funded":
+			subsidised = closing_cash - opening_cash
+			_check(int(model.memory.get("origin_subsidy_total_usd", 0)) > 0, "the funded subsidy reaches the ledger it actually spends from")
+			_check(bool(model.flags.get("origin_subsidy_seen", false)), "the first subsidised week is recorded")
+		else:
+			plain_cash = closing_cash - opening_cash
+			_check(int(model.memory.get("origin_subsidy_total_usd", 0)) == 0, "no other origin receives a subsidy")
+	_check(subsidised > plain_cash, "on the ledger path the funded rule is still worth something (%d vs %d)" % [subsidised, plain_cash])
+
+	# Same week, same transaction id: settling twice would double the advantage.
+	var replay = CampaignDirector.new()
+	replay.start_company("Ledger Replay Labs", false)
+	replay.model.origin_id = "funded"
+	replay.model.flags["expansion_systems_unlocked"] = true
+	replay.model.call("_activate_financial_ledger_authority")
+	replay.model.total_week = 5
+	replay.model.call("_apply_origin_subsidy")
+	var once := int(replay.model.business.ledger.get("cash_usd", 0))
+	replay.model.call("_apply_origin_subsidy")
+	_check(int(replay.model.business.ledger.get("cash_usd", 0)) == once, "one subsidy per week, even if the tick runs twice")
 
 
 func _test_authored_options_are_exclusive() -> void:
