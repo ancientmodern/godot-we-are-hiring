@@ -654,7 +654,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				elif _continue_rect().has_point(event.position) and _save_exists_or_recoverable():
 					new_game_confirm_pending = false
 					_continue_game()
-				elif _origin_back_rect().has_point(event.position):
+				elif _onboarding_back_rect().has_point(event.position):
 					_return_to_origin_step()
 			Screen.DASHBOARD:
 				_handle_dashboard_click(event.position)
@@ -3050,6 +3050,7 @@ func _draw_onboarding() -> void:
 	var start_shortcut := _gamepad_shortcut("Y" if has_save else "A", "ENTER")
 	_draw_folio_stamp(Rect2(614, 434, 118, 54), "待签发", Color(WARM_70, 0.85), -0.075)
 	_draw_ledger_button(button, start_label, start_shortcut, "danger" if new_game_confirm_pending else ("quiet" if has_save else "primary"), true, _focus_is("onboarding", 0))
+	_draw_ledger_button(_onboarding_back_rect(), "换一份", _gamepad_shortcut("B", "ESC"), "quiet")
 	if has_save:
 		var continue_button := _continue_rect()
 		_draw_ledger_button(continue_button, "翻到上次停下的位置", _gamepad_shortcut("A", "ENTER"), "primary", true, _focus_is("onboarding", 1))
@@ -3282,7 +3283,12 @@ func _draw_dashboard() -> void:
 
 
 func _week_author_label(action_id: String) -> String:
-	return "它" if str(used_action_authors.get(action_id, "self")) == "model" else "你"
+	# A save written before authorship was recorded knows the action happened and
+	# not who did it. Saying 你 there would be a confident wrong answer about the
+	# one thing this stamp exists to report.
+	if not used_action_authors.has(action_id):
+		return "已处理"
+	return "它" if str(used_action_authors[action_id]) == "model" else "你"
 
 
 func _draw_week_register() -> void:
@@ -3290,13 +3296,18 @@ func _draw_week_register() -> void:
 	# the only number the game never states out loud anywhere else.
 	var by_self := 0
 	var by_model := 0
+	var unattributed := 0
 	for action_id in used_action_ids:
-		if str(used_action_authors.get(action_id, "self")) == "model":
+		if not used_action_authors.has(action_id):
+			unattributed += 1
+		elif str(used_action_authors[action_id]) == "model":
 			by_model += 1
 		else:
 			by_self += 1
 	var pending := maxi(0, week_action_ids.size() - used_action_ids.size())
 	var register := "本周登记 · 尚未处理任何一件。" if used_action_ids.is_empty() else "本周登记 · 你 %d · 它 %d · 未处理 %d" % [by_self, by_model, pending]
+	if unattributed > 0:
+		register += " · 未记名 %d" % unattributed
 	draw_line(Vector2(316, 546), Vector2(756, 546), RULE_SOFT, 1.0)
 	_draw_text(register, Vector2(316, 566), TYPE_META, MUTED)
 
@@ -3375,8 +3386,8 @@ func _draw_action_card(index: int) -> void:
 	if used:
 		# The stamp records the author, not the fact. Delegated rows come out in
 		# registration green and read as the tidier ones — which is the point.
-		var by_model := str(used_action_authors.get(action_id, "self")) == "model"
-		_draw_folio_stamp(Rect2(visual_rect.end.x - 68, visual_rect.position.y + 9, 56, 34), _week_author_label(action_id), PAPER_GREEN if by_model else MUTED, -0.045)
+		var by_model := str(used_action_authors.get(action_id, "")) == "model"
+		_draw_folio_stamp(Rect2(visual_rect.end.x - 76, visual_rect.position.y + 9, 64, 34), _week_author_label(action_id), PAPER_GREEN if by_model else MUTED, -0.045)
 	elif not available:
 		var blocked_reason := _action_unavailable_reason(action_id, false)
 		_draw_text(blocked_reason, visual_rect.position + Vector2(visual_rect.size.x - 238, 48), TYPE_META, MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 222)
@@ -4886,8 +4897,7 @@ func _draw_first_day_prologue() -> void:
 	draw_line(panel.position + Vector2(32, 106), panel.position + Vector2(panel.size.x - 32, 106), RULE_STRONG, 1.0)
 	var choices := _first_day_choices()
 	var phase_ready := _first_day_ready()
-	var body_height := 190.0 if not choices.is_empty() else 356.0
-	_draw_first_day_paragraphs(_first_day_phase_body(), Rect2(panel.position + Vector2(34, 128), Vector2(660, body_height)))
+	_draw_first_day_paragraphs(_first_day_phase_body(), _first_day_body_rect(not choices.is_empty()))
 
 	if not phase_ready:
 		var waiting_width := 46.0 + float(_first_day_phase_body().size()) * 12.0
@@ -5010,10 +5020,22 @@ func _draw_first_day_terminal_card(frame: Rect2, phase_index: int) -> void:
 		draw_rect(Rect2(card.position + Vector2(14, 74), Vector2((card.size.x - 28) * pulse, 2)), Color(GREEN_BRIGHT, 0.70))
 
 
+func _first_day_body_rect(has_choices: bool) -> Rect2:
+	# One definition, used by the renderer and published to the contract. They
+	# used to disagree — the contract advertised a 154px box while the code drew
+	# 190 or 356 — so the overlap test was checking a rectangle nothing draws, and
+	# an opening beat whose copy ran into its own answer buttons passed.
+	var top := 276.0
+	var floor_y := (_first_day_choice_rect(0).position.y - 8.0) if has_choices else (_first_day_continue_rect().position.y - 12.0)
+	return Rect2(88, top, 660, maxf(60.0, floor_y - top))
+
+
 func _first_day_visual_contract() -> Dictionary:
 	return {
 		"surface": Rect2(54, 148, 730, 520),
-		"body": Rect2(88, 270, 660, 154),
+		"body": _first_day_body_rect(not _first_day_choices().is_empty()),
+		"body_with_choices": _first_day_body_rect(true),
+		"body_with_continue": _first_day_body_rect(false),
 		"choices": [_first_day_choice_rect(0), _first_day_choice_rect(1), _first_day_choice_rect(2)],
 		"continue": _first_day_continue_rect(),
 		"skip": _first_day_skip_rect(),
@@ -6857,7 +6879,10 @@ func _draw_folio_stamp(rect: Rect2, label: String, color: Color, angle: float = 
 	var local_rect := Rect2(-rect.size * 0.5, rect.size)
 	draw_set_transform(rect.get_center(), angle)
 	_draw_panel(local_rect, Color(color, 0.045), Color(color, 0.62), 1.0, 2.0)
-	_draw_text_centered("  ".join(label.split()) if label.contains(" ") else label, local_rect, TYPE_LABEL, Color(color, 0.78), 2.0)
+	# No letter-spacing. `String.split()` with no delimiter splits per character,
+	# not per word, so the "spaced stamp" idea turned 下一页 1 / 2 · ENTER from
+	# 142px into 249px inside a 146px box and printed off the sheet.
+	_draw_text_centered(_fit_text(label, TYPE_LABEL, local_rect.size.x - 16.0), local_rect, TYPE_LABEL, Color(color, 0.78), 2.0)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -6912,8 +6937,15 @@ func _draw_ledger_button(rect: Rect2, label: String, shortcut: String = "", vari
 		_draw_panel(face.grow(4.0), Color.TRANSPARENT, GREEN_BRIGHT, RADIUS_CONTROL + 3.0, 2.0)
 	# The label carries the decision; it should not be the same size as the page
 	# numbers. Long fallback labels ("需算力 8 / 当前 7") step down one rung so a
-	# blocked control still reads as one line rather than clipping.
-	var label_size := TYPE_ACTION if label.length() <= 7 else TYPE_LABEL
+	# blocked control still reads as one line rather than clipping. Counting
+	# characters was the wrong test — 再次确认跳过 is six characters and 102px in a
+	# 98px cell — so the rung is chosen by measuring the cell it has to fit.
+	var label_cell := face.size.x - 20.0
+	if not shortcut.is_empty():
+		label_cell = face.size.x - maxf(48.0, font.get_string_size(shortcut, HORIZONTAL_ALIGNMENT_LEFT, -1, TYPE_META).x + 20.0) - 14.0
+	var label_size := TYPE_ACTION
+	if font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, TYPE_ACTION).x > label_cell:
+		label_size = TYPE_LABEL
 	if shortcut.is_empty():
 		_draw_text_centered(label, face, label_size, text_color, 2.0)
 	else:
@@ -7113,6 +7145,14 @@ func _origin_confirm_rect() -> Rect2:
 
 func _origin_back_rect() -> Rect2:
 	return Rect2(326, 574, 132, 50)
+
+
+func _onboarding_back_rect() -> Rect2:
+	# Drawn on the naming sheet, so the region that sends you back to the origin
+	# index is somewhere the player can see. Previously this reused the origin
+	# sheet's rect, which is blank paper on step two: clicking it threw the player
+	# back a page with nothing to explain why.
+	return Rect2(326, 508, 132, 52)
 
 
 func _set_selected_origin(index: int) -> void:
