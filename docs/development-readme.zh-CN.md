@@ -120,7 +120,19 @@ $PythonExe = (Get-Command python).Source
 # 对全部玩家可见语料、AI 效用、异常行政表面和歧义词做封闭清单审计
 & $GodotExe --headless --path . --quit-after 5000 --script tests/hiring_semantic_audit_test.gd
 
-# 267 项需求与逐条证据账本保持唯一、一一对应、同序
+# 引号约定、语气上限、行动描述不复述数值面板，以及每个开场节拍在其纸面内放得下
+& $GodotExe --headless --path . --quit-after 5000 --script tests/hiring_editorial_test.gd
+
+# 三条出身：等长同体裁的序章、共有内容改写、永久规则与选项代价
+& $GodotExe --headless --path . --quit-after 5000 --script tests/hiring_origin_test.gd
+
+# 三条出身各跑一遍完整战役：出身页 → 序章 → 车库 → 周循环 → 结局，无卡死
+& $GodotExe --headless --path . --quit-after 5000 --script tests/hiring_origin_soak_test.gd
+
+# 车库开场的三段回应、关系维度分别记账与确认式跳过
+& $GodotExe --headless --path . --quit-after 5000 --script tests/hiring_opening_experience_test.gd
+
+# 272 项需求与逐条证据账本保持唯一、一一对应、同序
 & $PythonExe tests/verify_requirement_topology.py
 
 # 美术、字体与许可证的精确闭包、SHA-256、尺寸、透明通道和文件类型
@@ -150,7 +162,7 @@ $SmokeId = [guid]::NewGuid().ToString('N')
 & $PythonExe tests/verify_ui_visual_contract.py
 ```
 
-截图会写入 `artifacts/screenshots/`；捕获成功必须同时具备 81 条 `CAPTURED:`、81 个唯一输出路径和 `HIRING_VISUAL_CAPTURE_PASS: 81 captures`，不能用目录内 PNG 总数代替。像素核验除证明阶段三只改选项文字、电梯异常按钮复用普通主题、裁员社交状态产生局部动画外，还会验证 Dashboard/Team 的 38 个实体阅读面采样、14 个侧栏遮盖采样、7 个精确面板边界，以及设置遮罩对底层亮度、高光和纹理的衰减。
+截图会写入 `artifacts/screenshots/`；捕获成功必须同时具备 87 条 `CAPTURED:`、87 个唯一输出路径、`HIRING_VISUAL_CAPTURE_PASS: 87 captures` 和同一次运行的 `TEXT_FIT_OVERFLOWS: 0`，不能用目录内 PNG 总数代替。任何单行文字放不进它被给定的宽度都会让这条命令失败——`draw_string` 会静默裁掉，截图契约看不出一个提前结束的词。像素核验除证明阶段三只改选项文字、电梯异常按钮复用普通主题、裁员社交状态产生局部动画外，还会验证 Dashboard/Team 的 38 个实体阅读面采样、14 个侧栏遮盖采样、7 个精确面板边界，以及设置遮罩对底层亮度、高光和纹理的衰减。
 
 需要生成可听/可复核证据时：
 
@@ -176,7 +188,7 @@ $SmokeId = [guid]::NewGuid().ToString('N')
 
 自动测试只能证明规则和内容可运行，不能证明叙事体验成立。创意圣经规定的五项首次玩家验收目前仍然**未验证**；发布前须按 [`docs/player_test_protocol.md`](docs/player_test_protocol.md) 收集真人首玩录像、行为日志和访谈原话。
 
-项目的公司经营系统设计与实现边界见 [`docs/company_systems_design.md`](docs/company_systems_design.md)，完整需求追踪见 [`docs/requirements_matrix.md`](docs/requirements_matrix.md)，267 项逐条状态与证据见 [`docs/requirement_evidence_ledger.md`](docs/requirement_evidence_ledger.md)，已裁决的产品口径见 [`docs/product_decisions.md`](docs/product_decisions.md)，视觉系统与原创资产边界见 [`docs/art_direction.md`](docs/art_direction.md)，内部叙事签核见 [`docs/editorial_review.md`](docs/editorial_review.md)，原候选构建的机器验证记录见 [`docs/verification_report.md`](docs/verification_report.md)。
+项目的公司经营系统设计与实现边界见 [`docs/company_systems_design.md`](docs/company_systems_design.md)，完整需求追踪见 [`docs/requirements_matrix.md`](docs/requirements_matrix.md)，272 项逐条状态与证据见 [`docs/requirement_evidence_ledger.md`](docs/requirement_evidence_ledger.md)，已裁决的产品口径见 [`docs/product_decisions.md`](docs/product_decisions.md)，视觉系统与原创资产边界见 [`docs/art_direction.md`](docs/art_direction.md)，内部叙事签核见 [`docs/editorial_review.md`](docs/editorial_review.md)，原候选构建的机器验证记录见 [`docs/verification_report.md`](docs/verification_report.md)。
 
 ## 项目定位
 
