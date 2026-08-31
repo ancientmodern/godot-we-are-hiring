@@ -3,7 +3,7 @@
 > 状态：实施前基线（所有条目默认 **未验证**）  
 > 唯一产品规范：[`we-are-hiring-creative-bible.md`](../we-are-hiring-creative-bible.md)  
 > 用途：把策划案转成可实现、可追踪、可逐项举证的完成标准。本文不是策划摘要，也不因当前原型的能力而缩小范围。
-> 当前构建的 267 项逐条审计结果：[`requirement_evidence_ledger.md`](requirement_evidence_ledger.md)
+> 当前构建的 272 项逐条审计结果：[`requirement_evidence_ledger.md`](requirement_evidence_ledger.md)
 
 ## 0. 审计约定
 
