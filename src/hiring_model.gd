@@ -1745,6 +1745,9 @@ func _apply_origin_subsidy() -> void:
 	# path scales the weekly burn directly; on the ledger the founder's own money
 	# arrives as a cash line, so operating costs stay honest and the subsidy is
 	# auditable in the journal rather than hidden inside payroll.
+	# Cleared first: a week with nothing to subsidise must not keep reporting the
+	# last week that had something.
+	memory["origin_subsidy_week_usd"] = 0
 	if origin_id != "funded" or not uses_authoritative_financial_ledger():
 		return
 	var share := 1.0 - origin_weekly_burn_multiplier()

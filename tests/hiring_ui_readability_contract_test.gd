@@ -84,19 +84,31 @@ func _test_opening_geometry(contract: Dictionary) -> void:
 	_check(surface.encloses(continue_target), "the opening Continue target belongs to its opaque reading sheet")
 	_check(choices.size() == 3, "the opening contract exposes exactly three response targets")
 
-	var sibling_regions: Array[Rect2] = [body, continue_target, skip_target]
+	# The beat either offers responses or offers Continue; it never offers both,
+	# so the copy box is a different height in each case and each case is checked
+	# against the controls that are actually on screen with it. Comparing one
+	# published rect against every control at once is how a body that ran into its
+	# own answer buttons passed for as long as it did.
+	var body_with_choices := Rect2(opening["body_with_choices"])
+	var body_with_continue := Rect2(opening["body_with_continue"])
+	_check(surface.encloses(body_with_choices) and surface.encloses(body_with_continue), "both opening copy boxes belong to the opaque reading sheet")
+	_check(not body_with_continue.intersects(continue_target), "the Continue beat's copy stops above its Continue control")
+	_check(not body_with_continue.intersects(skip_target), "the Continue beat's copy never reaches Skip")
+	_check(not body_with_choices.intersects(skip_target), "the response beat's copy never reaches Skip")
+
+	var choice_regions: Array[Rect2] = [body_with_choices]
 	for i in choices.size():
 		var choice := Rect2(choices[i])
 		_check(viewport.encloses(choice), "opening response target %d stays inside the viewport" % i)
 		_check(surface.encloses(choice), "opening response target %d belongs to its opaque reading sheet" % i)
 		_check(_meets_minimum_target(choice, minimum_target), "opening response target %d is at least %.0f px on both axes" % [i, minimum_target])
-		sibling_regions.append(choice)
+		choice_regions.append(choice)
 
 	_check(_meets_minimum_target(continue_target, minimum_target), "opening Continue is at least %.0f px on both axes" % minimum_target)
 	_check(_meets_minimum_target(skip_target, minimum_target), "opening Skip is at least %.0f px on both axes" % minimum_target)
-	for i in sibling_regions.size():
-		for j in range(i + 1, sibling_regions.size()):
-			_check(not sibling_regions[i].intersects(sibling_regions[j]), "opening regions %d and %d do not overlap" % [i, j])
+	for i in choice_regions.size():
+		for j in range(i + 1, choice_regions.size()):
+			_check(not choice_regions[i].intersects(choice_regions[j]), "opening response regions %d and %d do not overlap" % [i, j])
 
 
 func _test_shared_safe_areas(contract: Dictionary) -> void:

@@ -9,6 +9,9 @@ extends SceneTree
 ## voice. They exist as a test because prose drifts and a style guide does not
 ## fail a build.
 
+const HiringMain = preload("res://src/hiring_main.gd")
+const HiringContent = preload("res://src/hiring_content.gd")
+
 const SOURCES := [
 	"res://src/hiring_content.gd",
 	"res://src/hiring_expansion_content.gd",
@@ -32,6 +35,7 @@ func _run() -> void:
 	_test_one_way_to_quote_a_person(corpus)
 	_test_prose_does_not_shout(corpus)
 	_test_actions_do_not_repeat_their_own_panel()
+	_test_every_authored_beat_fits_its_sheet()
 
 	if failures.is_empty():
 		print("HIRING_EDITORIAL_TESTS_PASS: %d checks over %d strings" % [checks, corpus.size()])
@@ -89,6 +93,48 @@ func _test_actions_do_not_repeat_their_own_panel() -> void:
 		if numeric.search(description) != null:
 			offenders.append("%s: %s" % [str(action_id), description])
 	_check(offenders.is_empty(), "no action description restates its own effect panel (%s)" % ", ".join(PackedStringArray(offenders)))
+
+
+func _test_every_authored_beat_fits_its_sheet() -> void:
+	# _draw_first_day_paragraphs stops drawing when it runs out of box, so a beat
+	# whose copy grew by one line loses its last line and says nothing about it.
+	# The line that goes is the last one written, which is usually the one the
+	# beat was written for.
+	var ui = HiringMain.new()
+	ui.save_path_override = "user://editorial_fit_%d.json" % OS.get_process_id()
+	ui.meta_path_override = "user://editorial_fit_meta_%d.json" % OS.get_process_id()
+	Engine.get_main_loop().root.add_child(ui)
+
+	var sheets := {
+		"garage": HiringContent.get_fixed_event(0, 1),
+	}
+	for origin_id in HiringContent.ORIGIN_ORDER:
+		sheets[str(origin_id)] = {"opening_phases": HiringContent.origin_prologue(origin_id).get("phases", [])}
+
+	for sheet_id in sheets:
+		var phases: Array = Dictionary(sheets[sheet_id]).get("opening_phases", [])
+		for phase_value in phases:
+			var phase: Dictionary = phase_value
+			var has_choices := not Array(phase.get("responses", [])).is_empty()
+			var box: Rect2 = ui.call("_first_day_body_rect", has_choices)
+			# Worst case: the longest variant that can precede this beat's body.
+			var prefixes: Array = [[]]
+			var variants: Dictionary = phase.get("body_variants", {})
+			for variant_key in variants:
+				prefixes.append(Array(variants[variant_key]))
+			for prefix_value in prefixes:
+				var paragraphs: Array = Array(prefix_value).duplicate()
+				paragraphs.append_array(Array(phase.get("body", [])))
+				var needed := 0.0
+				for paragraph_value in paragraphs:
+					var text := str(paragraph_value).replace("{{company}}", "提灯实验室")
+					var wrapped: Array = ui.call("_wrap_text_px", text, box.size.x, 15)
+					needed += float(wrapped.size()) * 23.0 + 8.0
+				_check(needed <= box.size.y, "%s/%s fits its sheet (%.0f of %.0f px%s)" % [
+					sheet_id, str(phase.get("id", "?")), needed, box.size.y,
+					"" if Array(prefix_value).is_empty() else " with its longest reply"
+				])
+	ui.queue_free()
 
 
 func _collect_corpus() -> Array:
